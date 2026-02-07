@@ -20,7 +20,17 @@ def create_app(config_name: str = None) -> Flask:
     
     # Configuration
     app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///study_companion.db')
+    
+    # Database URL configuration - convert psycopg2 to psycopg3 for Python 3.13 compatibility
+    database_url = os.getenv('DATABASE_URL', '')
+    if database_url and database_url.startswith('postgresql://'):
+        # Convert postgresql:// to postgresql+psycopg:// for psycopg3
+        database_url = database_url.replace('postgresql://', 'postgresql+psycopg://', 1)
+    elif not database_url:
+        # Use SQLite as fallback if DATABASE_URL not set
+        database_url = 'sqlite:///study_companion.db'
+    
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['OPENAI_API_KEY'] = os.getenv('OPENAI_API_KEY')
     
