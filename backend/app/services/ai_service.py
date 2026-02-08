@@ -19,7 +19,9 @@ class AIService:
         if self._client is None:
             api_key = current_app.config.get('OPENAI_API_KEY')
             if not api_key:
-                raise ValueError("OPENAI_API_KEY not configured")
+                print("ERROR: OPENAI_API_KEY not found in config")
+                print(f"Available config keys: {list(current_app.config.keys())}")
+                raise ValueError("OPENAI_API_KEY not configured in Flask app config")
             self._client = OpenAI(api_key=api_key)
         return self._client
     

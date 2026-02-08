@@ -72,6 +72,9 @@ def chat():
         })
         
     except Exception as e:
+        import traceback
+        print(f"Tutor chat error: {str(e)}")
+        print(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
 
