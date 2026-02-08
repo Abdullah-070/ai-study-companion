@@ -157,45 +157,24 @@ Respond in a conversational but educational tone."""
         
         response = self.model.generate_content(prompt)
         return response.text
-        
-        messages.append({"role": "user", "content": message})
-        
-        response = self.client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=messages,
-            max_tokens=1000,
-            temperature=0.7
-        )
-        
-        return response.choices[0].message.content
     
     def generate_notes_from_transcription(self, transcription: str) -> str:
         """Generate organized study notes from lecture transcription."""
-        response = self.client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {
-                    "role": "system",
-                    "content": """You are an expert note-taker. Transform the following lecture transcription into well-organized study notes.
-                    
-                    Format the notes with:
-                    - Clear headings and subheadings
-                    - Bullet points for key concepts
-                    - Highlighted important terms (use **bold**)
-                    - A brief summary at the end
-                    
-                    Make the notes concise but comprehensive, focusing on what would be useful for studying and exam preparation."""
-                },
-                {
-                    "role": "user",
-                    "content": transcription
-                }
-            ],
-            max_tokens=2000,
-            temperature=0.4
-        )
+        prompt = """You are an expert note-taker. Transform the following lecture transcription into well-organized study notes.
+
+Format the notes with:
+- Clear headings and subheadings
+- Bullet points for key concepts
+- Highlighted important terms (use **bold**)
+- A brief summary at the end
+
+Make the notes concise but comprehensive, focusing on what would be useful for studying and exam preparation.
+
+Transcription:
+""" + transcription
         
-        return response.choices[0].message.content
+        response = self.model.generate_content(prompt)
+        return response.text
 
 
 # Singleton instance
