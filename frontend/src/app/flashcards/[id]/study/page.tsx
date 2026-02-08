@@ -8,7 +8,7 @@ import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 
-export default function FlashcardSetPage() {
+export default function FlashcardStudyPage() {
   const params = useParams();
   const router = useRouter();
   const flashcardSetId = params.id as string;
@@ -18,6 +18,7 @@ export default function FlashcardSetPage() {
   const [error, setError] = useState('');
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
+  const [masteredCards, setMasteredCards] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     const loadData = async () => {
@@ -25,10 +26,6 @@ export default function FlashcardSetPage() {
         setLoading(true);
         const setData = await flashcardsApi.getSet(parseInt(flashcardSetId));
         setSet(setData);
-        
-        // Flashcards are typically fetched from backend or embedded in the set
-        // For now, assuming they're requested as separate items or embedded
-        // You may need to add a backend endpoint to get flashcards by set_id
         setFlashcards(setData.flashcards || []);
         setError('');
       } catch (err) {
@@ -43,6 +40,27 @@ export default function FlashcardSetPage() {
       loadData();
     }
   }, [flashcardSetId]);
+
+  const handleNext = () => {
+    if (currentIndex < flashcards.length - 1) {
+      setCurrentIndex(currentIndex + 1);
+      setIsFlipped(false);
+    }
+  };
+
+  const handlePrevious = () => {
+    if (currentIndex > 0) {
+      setCurrentIndex(currentIndex - 1);
+      setIsFlipped(false);
+    }
+  };
+
+  const handleMastered = () => {
+    const newMastered = new Set(masteredCards);
+    newMastered.add(currentIndex);
+    setMasteredCards(newMastered);
+    handleNext();
+  };
 
   if (loading) {
     return (
@@ -64,14 +82,25 @@ export default function FlashcardSetPage() {
   }
 
   const currentCard = flashcards[currentIndex];
+  const progress = Math.round((masteredCards.size / flashcards.length) * 100);
 
   return (
     <div className="p-8 max-w-2xl mx-auto">
+      {/* Header */}
       <div className="mb-8">
-        <h1 className="text-4xl font-bold mb-4">{set.title}</h1>
-        <p className="text-gray-600">
+        <h1 className="text-4xl font-bold mb-2">{set.title}</h1>
+        <p className="text-gray-600 mb-4">
           Card {currentIndex + 1} of {flashcards.length}
         </p>
+        
+        {/* Progress bar */}
+        <div className="w-full bg-gray-200 rounded-full h-2">
+          <div
+            className="bg-green-500 h-2 rounded-full transition-all duration-300"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+        <p className="text-sm text-gray-500 mt-2">{masteredCards.size} mastered</p>
       </div>
 
       {/* Flashcard */}
@@ -80,60 +109,53 @@ export default function FlashcardSetPage() {
         onClick={() => setIsFlipped(!isFlipped)}
       >
         <div className="text-center p-8">
-          <div className="text-sm text-gray-600 mb-4">
+          <p className="text-sm text-gray-500 mb-4 font-semibold">
             {isFlipped ? 'Answer' : 'Question'}
-          </div>
-          <div className="text-2xl font-semibold text-gray-800">
+          </p>
+          <p className="text-2xl font-bold text-gray-800">
             {isFlipped ? currentCard.back : currentCard.front}
-          </div>
-          <div className="text-xs text-gray-400 mt-8">Click to flip</div>
+          </p>
+          <p className="text-sm text-gray-400 mt-4">Click to flip</p>
         </div>
       </Card>
 
-      {/* Navigation */}
-      <div className="flex gap-4 justify-between mb-8">
+      {/* Controls */}
+      <div className="flex gap-4 mb-6">
         <Button
-          onClick={() => setCurrentIndex(Math.max(0, currentIndex - 1))}
+          onClick={handlePrevious}
           disabled={currentIndex === 0}
+          className="flex-1"
+          variant="secondary"
         >
           ← Previous
         </Button>
-        
         <Button
-          onClick={() => setIsFlipped(false)}
-          variant="secondary"
-        >
-          Reset
-        </Button>
-        
-        <Button
-          onClick={() => setCurrentIndex(Math.min(flashcards.length - 1, currentIndex + 1))}
+          onClick={handleNext}
           disabled={currentIndex === flashcards.length - 1}
+          className="flex-1"
+          variant="secondary"
         >
           Next →
         </Button>
       </div>
 
-      {/* Progress bar */}
-      <div className="mb-8 bg-gray-200 rounded-full h-2">
-        <div
-          className="bg-blue-600 h-2 rounded-full transition-all"
-          style={{ width: `${((currentIndex + 1) / flashcards.length) * 100}%` }}
-        />
-      </div>
+      {/* Mark as mastered */}
+      <Button
+        onClick={handleMastered}
+        className="w-full mb-4"
+        disabled={masteredCards.has(currentIndex)}
+      >
+        {masteredCards.has(currentIndex) ? '✓ Mastered' : 'Mark as Mastered'}
+      </Button>
 
-      {/* Action buttons */}
-      <div className="grid grid-cols-3 gap-4 mb-8">
-        <Button onClick={() => router.push(`/flashcards/${flashcardSetId}/study`)}>
-          Study Mode
-        </Button>
-        <Button onClick={() => router.push(`/flashcards/${flashcardSetId}/edit`)} variant="secondary">
-          Edit Cards
-        </Button>
-        <Button onClick={() => router.back()} variant="secondary">
-          Back
-        </Button>
-      </div>
+      {/* Back button */}
+      <Button
+        onClick={() => router.back()}
+        className="w-full"
+        variant="secondary"
+      >
+        Back to Flashcards
+      </Button>
     </div>
   );
 }
