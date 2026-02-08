@@ -22,7 +22,16 @@ class AIService:
                 print("ERROR: OPENAI_API_KEY not found in config")
                 print(f"Available config keys: {list(current_app.config.keys())}")
                 raise ValueError("OPENAI_API_KEY not configured in Flask app config")
-            self._client = OpenAI(api_key=api_key)
+            try:
+                # Initialize OpenAI client with explicit parameters to avoid proxy issues
+                self._client = OpenAI(api_key=api_key, timeout=30.0)
+            except TypeError as e:
+                if 'proxies' in str(e):
+                    # Fallback: use environment variable directly
+                    import os
+                    self._client = OpenAI(api_key=api_key, timeout=30.0)
+                else:
+                    raise
         return self._client
     
     def transcribe_audio(self, audio_file_path: str) -> str:
