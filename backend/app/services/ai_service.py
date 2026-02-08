@@ -24,21 +24,34 @@ class AIService:
         return self._client
     
     def transcribe_audio(self, audio_file_path: str) -> str:
-        """Note: Gemini doesn't support audio transcription. Use external service or upload as file."""
-        raise NotImplementedError("Audio transcription not yet supported with Gemini. Please use manual transcription.")
+        """Transcribe audio using OpenAI Whisper API."""
+        try:
+            with open(audio_file_path, 'rb') as audio_file:
+                transcript = self.client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=audio_file
+                )
+            return transcript.text
+        except Exception as e:
+            raise Exception(f"Audio transcription failed: {str(e)}")
     
     def summarize_text(self, text: str, max_length: int = 500) -> str:
-        """Generate a summary of the given text."""
+        """Generate a summary of the given text using OpenAI."""
         prompt = f"""You are an expert summarizer. Create a clear, concise summary of the following content in approximately {max_length} words. Focus on key concepts, main ideas, and important details that would be useful for studying.
 
 Content to summarize:
 {text}"""
         
-        response = self.model.generate_content(prompt)
-        return response.text
+        response = self.client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=1000
+        )
+        return response.choices[0].message.content
     
     def generate_flashcards(self, content: str, num_cards: int = 10) -> List[Dict[str, str]]:
-        """Generate flashcards from study content."""
+        """Generate flashcards from study content using OpenAI."""
         prompt = f"""You are an expert educator creating flashcards for students. 
 Generate exactly {num_cards} flashcards from the provided content.
 Each flashcard should have a clear question/term on the front and a concise answer/definition on the back.
@@ -52,8 +65,13 @@ Content:
 {content}"""
         
         try:
-            response = self.model.generate_content(prompt)
-            content_text = response.text.strip()
+            response = self.client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=2000
+            )
+            content_text = response.choices[0].message.content.strip()
             
             # Try to extract JSON from the response
             if content_text.startswith('['):
@@ -76,7 +94,7 @@ Content:
                 return result if isinstance(result, list) else []
         except json.JSONDecodeError as e:
             print(f"JSON decode error: {e}")
-            print(f"Response content: {response.text}")
+            print(f"Response content: {content_text}")
             return []
     
     def generate_quiz_questions(
@@ -85,7 +103,7 @@ Content:
         num_questions: int = 5,
         question_types: List[str] = None
     ) -> List[Dict]:
-        """Generate quiz questions from study content."""
+        """Generate quiz questions from study content using OpenAI."""
         if question_types is None:
             question_types = ['multiple_choice', 'true_false', 'short_answer']
         
@@ -106,8 +124,13 @@ Content:
 {content}"""
         
         try:
-            response = self.model.generate_content(prompt)
-            content_text = response.text.strip()
+            response = self.client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=2000
+            )
+            content_text = response.choices[0].message.content.strip()
             
             # Try to extract JSON from the response
             start = content_text.find('{')
@@ -129,7 +152,7 @@ Content:
         conversation_history: List[Dict[str, str]] = None,
         subject_context: str = None
     ) -> str:
-        """AI tutor chat for concept clarification and study help."""
+        """AI tutor chat for concept clarification and study help using OpenAI."""
         system_prompt = f"""You are an intelligent, patient, and encouraging study tutor.
 Your role is to help students understand concepts, answer questions, and provide study guidance.
 
@@ -144,21 +167,33 @@ Guidelines:
 
 Respond in a conversational but educational tone."""
         
-        # Build conversation context
-        prompt = system_prompt + "\n\n"
+        # Build messages for the API
+        messages = [{"role": "system", "content": system_prompt}]
+        
+        # Add conversation history if provided
         if conversation_history:
             for msg in conversation_history:
-                role = msg.get('role', 'user')
-                content = msg.get('content', '')
-                prompt += f"{role.capitalize()}: {content}\n"
+                messages.append({
+                    "role": msg.get('role', 'user'),
+                    "content": msg.get('content', '')
+                })
         
-        prompt += f"Student: {message}\nTutor:"
+        # Add the current message
+        messages.append({"role": "user", "content": message})
         
-        response = self.model.generate_content(prompt)
-        return response.text
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=messages,
+                temperature=0.7,
+                max_tokens=1000
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            raise Exception(f"Tutor chat failed: {str(e)}")
     
     def generate_notes_from_transcription(self, transcription: str) -> str:
-        """Generate organized study notes from lecture transcription."""
+        """Generate organized study notes from lecture transcription using OpenAI."""
         prompt = """You are an expert note-taker. Transform the following lecture transcription into well-organized study notes.
 
 Format the notes with:
@@ -172,8 +207,16 @@ Make the notes concise but comprehensive, focusing on what would be useful for s
 Transcription:
 """ + transcription
         
-        response = self.model.generate_content(prompt)
-        return response.text
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=2000
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            raise Exception(f"Note generation failed: {str(e)}")
 
 
 # Singleton instance
