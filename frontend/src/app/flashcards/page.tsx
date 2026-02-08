@@ -8,6 +8,7 @@ import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Textarea from '@/components/ui/Textarea';
 import Modal from '@/components/ui/Modal';
+import CardMenu from '@/components/ui/CardMenu';
 import { Card, CardContent } from '@/components/ui/Card';
 import { LoadingPage } from '@/components/ui/Loading';
 import Alert from '@/components/ui/Alert';
@@ -20,6 +21,8 @@ export default function FlashcardsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [modalType, setModalType] = useState<'create' | 'generate'>('create');
   const [formData, setFormData] = useState({
     title: '',
@@ -27,6 +30,10 @@ export default function FlashcardsPage() {
     subject_id: '',
     content: '',
     num_cards: 10,
+  });
+  const [editData, setEditData] = useState({
+    title: '',
+    description: '',
   });
   const [submitting, setSubmitting] = useState(false);
 
@@ -95,6 +102,40 @@ export default function FlashcardsPage() {
     }
   };
 
+  const handleEditOpen = (set: FlashcardSet) => {
+    setEditingId(set.id);
+    setEditData({ title: set.title, description: set.description || '' });
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingId) return;
+
+    try {
+      setSubmitting(true);
+      const updated = await flashcardsApi.updateSet(editingId, editData);
+      setFlashcardSets(flashcardSets.map(s => s.id === editingId ? updated : s));
+      setIsEditModalOpen(false);
+      setEditingId(null);
+    } catch (err) {
+      setError('Failed to update flashcard set');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this flashcard set?')) return;
+    
+    try {
+      await flashcardsApi.deleteSet(id);
+      setFlashcardSets(flashcardSets.filter(s => s.id !== id));
+    } catch (err) {
+      setError('Failed to delete flashcard set');
+    }
+  };
+
   if (loading) return <LoadingPage />;
 
   return (
@@ -135,37 +176,45 @@ export default function FlashcardsPage() {
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
           {flashcardSets.map((set) => (
-            <Card key={set.id} hover>
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="p-2 bg-amber-50 rounded-lg">
-                    <Layers className="h-5 w-5 text-amber-600" />
+            <div key={set.id}>
+              <Card hover>
+                <CardContent className="p-5">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="p-2 bg-amber-50 rounded-lg">
+                      <Layers className="h-5 w-5 text-amber-600" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-500">{set.card_count} cards</span>
+                      <CardMenu
+                        onEdit={() => handleEditOpen(set)}
+                        onDelete={() => handleDelete(set.id)}
+                      />
+                    </div>
                   </div>
-                  <span className="text-sm text-gray-500">{set.card_count} cards</span>
-                </div>
-                <h3 className="font-semibold text-gray-900 mb-1">{set.title}</h3>
-                {set.description && (
-                  <p className="text-sm text-gray-600 line-clamp-2 mb-3">{set.description}</p>
-                )}
-                <div className="flex items-center justify-between text-xs text-gray-500 mb-4">
-                  <span className="px-2 py-1 bg-gray-100 rounded">{set.subject_name}</span>
-                  <span>{formatDate(set.created_at)}</span>
-                </div>
-                <div className="flex gap-2">
-                  <Link href={`/flashcards/${set.id}/study`} className="flex-1">
-                    <Button variant="primary" size="sm" className="w-full">
-                      <Play className="h-4 w-4 mr-1" />
-                      Study
-                    </Button>
-                  </Link>
-                  <Link href={`/flashcards/${set.id}`}>
-                    <Button variant="outline" size="sm">
-                      Edit
-                    </Button>
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
+                  <h3 className="font-semibold text-gray-900 mb-1">{set.title}</h3>
+                  {set.description && (
+                    <p className="text-sm text-gray-600 line-clamp-2 mb-3">{set.description}</p>
+                  )}
+                  <div className="flex items-center justify-between text-xs text-gray-500 mb-4">
+                    <span className="px-2 py-1 bg-gray-100 rounded">{set.subject_name}</span>
+                    <span>{formatDate(set.created_at)}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Link href={`/flashcards/${set.id}/study`} className="flex-1">
+                      <Button variant="primary" size="sm" className="w-full">
+                        <Play className="h-4 w-4 mr-1" />
+                        Study
+                      </Button>
+                    </Link>
+                    <Link href={`/flashcards/${set.id}`}>
+                      <Button variant="outline" size="sm">
+                        Edit
+                      </Button>
+                    </Link>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           ))}
         </div>
       )}
@@ -205,6 +254,14 @@ export default function FlashcardsPage() {
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
           />
           
+          {modalType === 'create' && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-sm text-blue-900">
+                <strong>📝 How it works:</strong> Create an empty set, then add cards manually inside the set. Or click the "Edit" button after creation to add initial cards.
+              </p>
+            </div>
+          )}
+          
           {modalType === 'generate' && (
             <>
               <Textarea
@@ -239,6 +296,37 @@ export default function FlashcardsPage() {
               {submitting
                 ? modalType === 'generate' ? 'Generating...' : 'Creating...'
                 : modalType === 'generate' ? 'Generate Flashcards' : 'Create Set'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Edit Modal */}
+      <Modal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        title="Edit Flashcard Set"
+        size="lg"
+      >
+        <form onSubmit={handleEditSubmit} className="p-6 space-y-4">
+          <Input
+            label="Title"
+            value={editData.title}
+            onChange={(e) => setEditData({ ...editData, title: e.target.value })}
+            required
+          />
+          <Textarea
+            label="Description (optional)"
+            value={editData.description}
+            onChange={(e) => setEditData({ ...editData, description: e.target.value })}
+            rows={3}
+          />
+          <div className="flex justify-end gap-3 pt-4">
+            <Button type="button" variant="outline" onClick={() => setIsEditModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? 'Saving...' : 'Save Changes'}
             </Button>
           </div>
         </form>

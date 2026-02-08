@@ -8,6 +8,7 @@ import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Textarea from '@/components/ui/Textarea';
 import Modal from '@/components/ui/Modal';
+import CardMenu from '@/components/ui/CardMenu';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { LoadingPage, LoadingCard } from '@/components/ui/Loading';
 import Alert from '@/components/ui/Alert';
@@ -20,7 +21,10 @@ export default function LecturesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalType, setModalType] = useState<'youtube' | 'manual' | 'audio'>('youtube');
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [modalType, setModalType] = useState<'youtube' | 'manual' | 'audio' | 'file'>('youtube');
+  const [manualUploadType, setManualUploadType] = useState<'text' | 'audio' | 'file'>('text');
   const [formData, setFormData] = useState({
     title: '',
     url: '',
@@ -28,7 +32,9 @@ export default function LecturesPage() {
     transcription: '',
     generate_summary: true,
   });
+  const [editData, setEditData] = useState({ title: '', transcription: '' });
   const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [docFile, setDocFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -52,8 +58,9 @@ export default function LecturesPage() {
     }
   };
 
-  const openModal = (type: 'youtube' | 'manual' | 'audio') => {
+  const openModal = (type: 'youtube' | 'manual' | 'audio' | 'file', uploadType?: 'text' | 'audio' | 'file') => {
     setModalType(type);
+    if (uploadType) setManualUploadType(uploadType);
     setFormData({
       title: '',
       url: '',
@@ -62,7 +69,42 @@ export default function LecturesPage() {
       generate_summary: true,
     });
     setAudioFile(null);
+    setDocFile(null);
     setIsModalOpen(true);
+  };
+
+  const handleEditOpen = (lecture: Lecture) => {
+    setEditingId(lecture.id);
+    setEditData({ title: lecture.title, transcription: lecture.transcription || '' });
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingId) return;
+
+    try {
+      setSubmitting(true);
+      const updated = await lecturesApi.update(editingId, editData);
+      setLectures(lectures.map(l => l.id === editingId ? updated : l));
+      setIsEditModalOpen(false);
+      setEditingId(null);
+    } catch (err: any) {
+      setError(err.message || 'Failed to update lecture');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this lecture?')) return;
+    
+    try {
+      await lecturesApi.delete(id);
+      setLectures(lectures.filter(l => l.id !== id));
+    } catch (err) {
+      setError('Failed to delete lecture');
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -80,17 +122,38 @@ export default function LecturesPage() {
           title: formData.title || undefined,
           generate_summary: formData.generate_summary,
         });
-      } else if (modalType === 'audio') {
-        if (!audioFile) {
-          setError('Please select an audio file');
-          return;
+      } else if (modalType === 'manual') {
+        if (manualUploadType === 'audio') {
+          if (!audioFile) {
+            setError('Please select an audio file');
+            return;
+          }
+          newLecture = await lecturesApi.uploadAudio({
+            file: audioFile,
+            title: formData.title,
+            subject_id: parseInt(formData.subject_id),
+            generate_summary: formData.generate_summary,
+          });
+        } else if (manualUploadType === 'file') {
+          if (!docFile) {
+            setError('Please select a document file');
+            return;
+          }
+          newLecture = await lecturesApi.uploadDocument({
+            file: docFile,
+            title: formData.title,
+            subject_id: parseInt(formData.subject_id),
+            generate_summary: formData.generate_summary,
+          });
+        } else {
+          // text
+          newLecture = await lecturesApi.createManualTranscription({
+            title: formData.title,
+            subject_id: parseInt(formData.subject_id),
+            transcription: formData.transcription,
+            generate_summary: formData.generate_summary,
+          });
         }
-        newLecture = await lecturesApi.uploadAudio({
-          file: audioFile,
-          title: formData.title,
-          subject_id: parseInt(formData.subject_id),
-          generate_summary: formData.generate_summary,
-        });
       } else {
         newLecture = await lecturesApi.createManualTranscription({
           title: formData.title,
@@ -124,18 +187,40 @@ export default function LecturesPage() {
           <p className="text-gray-500 mt-1">Transcribe and organize your lecture content</p>
         </div>
         <div className="flex gap-3">
-          <Button variant="outline" onClick={() => openModal('audio')}>
-            <Upload className="h-4 w-4 mr-2" />
-            Upload Audio
-          </Button>
-          <Button variant="outline" onClick={() => openModal('manual')}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Manually
-          </Button>
           <Button onClick={() => openModal('youtube')}>
             <Youtube className="h-4 w-4 mr-2" />
             From YouTube
           </Button>
+          <div className="relative group">
+            <Button variant="outline">
+              <Plus className="h-4 w-4 mr-2" />
+              Manual Upload
+              <span className="ml-2">▼</span>
+            </Button>
+            <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+              <button
+                onClick={() => openModal('manual', 'text')}
+                className="block w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 first:rounded-t-md border-b border-gray-100"
+              >
+                <span className="font-medium">📝 Paste Text</span>
+                <div className="text-xs text-gray-500">Paste transcription directly</div>
+              </button>
+              <button
+                onClick={() => openModal('manual', 'audio')}
+                className="block w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 border-b border-gray-100"
+              >
+                <span className="font-medium">🎵 Upload Audio</span>
+                <div className="text-xs text-gray-500">MP3, WAV, M4A, OGG, FLAC, WebM</div>
+              </button>
+              <button
+                onClick={() => openModal('manual', 'file')}
+                className="block w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 last:rounded-b-md"
+              >
+                <span className="font-medium">📄 Upload Document</span>
+                <div className="text-xs text-gray-500">PDF, DOCX, PPTX files</div>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -168,7 +253,7 @@ export default function LecturesPage() {
       ) : (
         <div className="space-y-4">
           {lectures.map((lecture) => (
-            <Link key={lecture.id} href={`/lectures/${lecture.id}`}>
+            <div key={lecture.id}>
               <Card hover>
                 <CardContent className="p-6">
                   <div className="flex items-start gap-4">
@@ -179,24 +264,26 @@ export default function LecturesPage() {
                         <BookOpen className="h-6 w-6 text-blue-500" />
                       )}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <h3 className="font-semibold text-gray-900">{lecture.title}</h3>
-                          <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
-                            <span>{lecture.subject_name}</span>
-                            {lecture.duration_seconds && (
-                              <>
-                                <span>•</span>
-                                <span>{formatDuration(lecture.duration_seconds)}</span>
-                              </>
-                            )}
-                            <span>•</span>
-                            <span>{formatDate(lecture.created_at)}</span>
+                    <Link href={`/lectures/${lecture.id}`} className="flex-1">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <h3 className="font-semibold text-gray-900">{lecture.title}</h3>
+                            <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
+                              <span>{lecture.subject_name}</span>
+                              {lecture.duration_seconds && (
+                                <>
+                                  <span>•</span>
+                                  <span>{formatDuration(lecture.duration_seconds)}</span>
+                                </>
+                              )}
+                              <span>•</span>
+                              <span>{formatDate(lecture.created_at)}</span>
+                            </div>
                           </div>
                         </div>
                         {lecture.summary && (
-                          <span className="inline-flex items-center px-2 py-1 bg-green-50 text-green-700 text-xs rounded-full">
+                          <span className="inline-flex items-center px-2 py-1 bg-green-50 text-green-700 text-xs rounded-full mt-2">
                             <Sparkles className="h-3 w-3 mr-1" />
                             Summarized
                           </span>
@@ -207,11 +294,17 @@ export default function LecturesPage() {
                           {truncateText(lecture.summary, 200)}
                         </p>
                       )}
+                    </Link>
+                    <div className="ml-auto pl-4">
+                      <CardMenu
+                        onEdit={() => handleEditOpen(lecture)}
+                        onDelete={() => handleDelete(lecture.id)}
+                      />
                     </div>
                   </div>
                 </CardContent>
               </Card>
-            </Link>
+            </div>
           ))}
         </div>
       )}
@@ -272,7 +365,7 @@ export default function LecturesPage() {
                 <span className="text-sm text-gray-700">Generate AI summary</span>
               </label>
             </>
-          ) : modalType === 'audio' ? (
+          ) : modalType === 'manual' ? (
             <>
               <Input
                 label="Title"
@@ -281,23 +374,61 @@ export default function LecturesPage() {
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                 required
               />
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Audio File (WAV, MP3, M4A, OGG, FLAC, WebM)
-                </label>
-                <input
-                  type="file"
-                  accept="audio/*"
-                  onChange={(e) => setAudioFile(e.target.files?.[0] || null)}
-                  className="block w-full text-sm text-gray-500
-                    file:mr-4 file:py-2 file:px-4
-                    file:rounded-lg file:border-0
-                    file:text-sm file:font-semibold
-                    file:bg-primary-50 file:text-primary-700
-                    hover:file:bg-primary-100"
+              
+              {manualUploadType === 'text' && (
+                <Textarea
+                  label="Transcription"
+                  placeholder="Paste your lecture transcription here..."
+                  value={formData.transcription}
+                  onChange={(e) => setFormData({ ...formData, transcription: e.target.value })}
+                  rows={8}
                   required
                 />
-              </div>
+              )}
+              
+              {manualUploadType === 'audio' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Audio File (WAV, MP3, M4A, OGG, FLAC, WebM)
+                  </label>
+                  <input
+                    type="file"
+                    accept="audio/*"
+                    onChange={(e) => setAudioFile(e.target.files?.[0] || null)}
+                    className="block w-full text-sm text-gray-500
+                      file:mr-4 file:py-2 file:px-4
+                      file:rounded-lg file:border-0
+                      file:text-sm file:font-semibold
+                      file:bg-primary-50 file:text-primary-700
+                      hover:file:bg-primary-100"
+                    required
+                  />
+                </div>
+              )}
+              
+              {manualUploadType === 'file' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Document File (PDF, DOCX, PPTX)
+                  </label>
+                  <input
+                    type="file"
+                    accept=".pdf,.docx,.doc,.pptx,.ppt"
+                    onChange={(e) => setDocFile(e.target.files?.[0] || null)}
+                    className="block w-full text-sm text-gray-500
+                      file:mr-4 file:py-2 file:px-4
+                      file:rounded-lg file:border-0
+                      file:text-sm file:font-semibold
+                      file:bg-primary-50 file:text-primary-700
+                      hover:file:bg-primary-100"
+                    required
+                  />
+                  <p className="text-xs text-gray-500 mt-2">
+                    We'll extract text from the document and create a transcription.
+                  </p>
+                </div>
+              )}
+              
               <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -353,6 +484,38 @@ export default function LecturesPage() {
                 : modalType === 'audio'
                 ? 'Upload & Transcribe'
                 : 'Create Lecture'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Edit Modal */}
+      <Modal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        title="Edit Lecture"
+        size="lg"
+      >
+        <form onSubmit={handleEditSubmit} className="p-6 space-y-4">
+          <Input
+            label="Title"
+            value={editData.title}
+            onChange={(e) => setEditData({ ...editData, title: e.target.value })}
+            required
+          />
+          <Textarea
+            label="Transcription"
+            value={editData.transcription}
+            onChange={(e) => setEditData({ ...editData, transcription: e.target.value })}
+            rows={10}
+            required
+          />
+          <div className="flex justify-end gap-3 pt-4">
+            <Button type="button" variant="outline" onClick={() => setIsEditModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? 'Saving...' : 'Save Changes'}
             </Button>
           </div>
         </form>

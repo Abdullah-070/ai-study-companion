@@ -8,6 +8,7 @@ import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Textarea from '@/components/ui/Textarea';
 import Modal from '@/components/ui/Modal';
+import CardMenu from '@/components/ui/CardMenu';
 import { Card, CardContent } from '@/components/ui/Card';
 import { LoadingPage, LoadingCard } from '@/components/ui/Loading';
 import Alert from '@/components/ui/Alert';
@@ -19,10 +20,16 @@ export default function SubjectsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     color: generateSubjectColor(),
+  });
+  const [editData, setEditData] = useState({
+    name: '',
+    description: '',
   });
   const [submitting, setSubmitting] = useState(false);
 
@@ -55,6 +62,29 @@ export default function SubjectsPage() {
       setFormData({ name: '', description: '', color: generateSubjectColor() });
     } catch (err) {
       setError('Failed to create subject');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleEditOpen = (subject: Subject) => {
+    setEditingId(subject.id);
+    setEditData({ name: subject.name, description: subject.description || '' });
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingId || !editData.name.trim()) return;
+
+    try {
+      setSubmitting(true);
+      const updated = await subjectsApi.update(editingId, editData);
+      setSubjects(subjects.map(s => s.id === editingId ? updated : s));
+      setIsEditModalOpen(false);
+      setEditingId(null);
+    } catch (err) {
+      setError('Failed to update subject');
     } finally {
       setSubmitting(false);
     }
@@ -107,24 +137,34 @@ export default function SubjectsPage() {
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {subjects.map((subject) => (
-            <Link key={subject.id} href={`/subjects/${subject.id}`}>
-              <Card hover className="h-full">
+            <div key={subject.id}>
+              <Card hover className="h-full relative group">
                 <CardContent className="p-6">
                   <div className="flex items-start gap-4">
-                    <div
-                      className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0"
-                      style={{ backgroundColor: subject.color + '20' }}
-                    >
-                      <FolderOpen className="h-6 w-6" style={{ color: subject.color }} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-gray-900 truncate">{subject.name}</h3>
-                      {subject.description && (
-                        <p className="text-sm text-gray-500 mt-1 line-clamp-2">{subject.description}</p>
-                      )}
-                      <p className="text-xs text-gray-400 mt-2">
-                        Created {formatDate(subject.created_at)}
-                      </p>
+                    <Link href={`/subjects/${subject.id}`} className="flex-1">
+                      <div className="flex items-start gap-4">
+                        <div
+                          className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0"
+                          style={{ backgroundColor: subject.color + '20' }}
+                        >
+                          <FolderOpen className="h-6 w-6" style={{ color: subject.color }} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-gray-900 truncate">{subject.name}</h3>
+                          {subject.description && (
+                            <p className="text-sm text-gray-500 mt-1 line-clamp-2">{subject.description}</p>
+                          )}
+                          <p className="text-xs text-gray-400 mt-2">
+                            Created {formatDate(subject.created_at)}
+                          </p>
+                        </div>
+                      </div>
+                    </Link>
+                    <div className="absolute top-4 right-4">
+                      <CardMenu
+                        onEdit={() => handleEditOpen(subject)}
+                        onDelete={() => handleDelete(subject.id)}
+                      />
                     </div>
                   </div>
 
@@ -153,7 +193,7 @@ export default function SubjectsPage() {
                   </div>
                 </CardContent>
               </Card>
-            </Link>
+            </div>
           ))}
         </div>
       )}
@@ -197,6 +237,32 @@ export default function SubjectsPage() {
             </Button>
             <Button type="submit" disabled={submitting}>
               {submitting ? 'Creating...' : 'Create Subject'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Edit Modal */}
+      <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title="Edit Subject">
+        <form onSubmit={handleEditSubmit} className="p-6 space-y-4">
+          <Input
+            label="Subject Name"
+            value={editData.name}
+            onChange={(e) => setEditData({ ...editData, name: e.target.value })}
+            required
+          />
+          <Textarea
+            label="Description (optional)"
+            value={editData.description}
+            onChange={(e) => setEditData({ ...editData, description: e.target.value })}
+            rows={3}
+          />
+          <div className="flex justify-end gap-3 pt-4">
+            <Button type="button" variant="outline" onClick={() => setIsEditModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? 'Saving...' : 'Save Changes'}
             </Button>
           </div>
         </form>

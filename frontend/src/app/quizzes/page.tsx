@@ -8,6 +8,7 @@ import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Textarea from '@/components/ui/Textarea';
 import Modal from '@/components/ui/Modal';
+import CardMenu from '@/components/ui/CardMenu';
 import { Card, CardContent } from '@/components/ui/Card';
 import { LoadingPage } from '@/components/ui/Loading';
 import Alert from '@/components/ui/Alert';
@@ -20,6 +21,8 @@ export default function QuizzesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -27,6 +30,10 @@ export default function QuizzesPage() {
     content: '',
     num_questions: 5,
     question_types: ['multiple_choice', 'true_false', 'short_answer'],
+  });
+  const [editData, setEditData] = useState({
+    title: '',
+    description: '',
   });
   const [submitting, setSubmitting] = useState(false);
 
@@ -73,6 +80,40 @@ export default function QuizzesPage() {
     }
   };
 
+  const handleEditOpen = (quiz: Quiz) => {
+    setEditingId(quiz.id);
+    setEditData({ title: quiz.title, description: quiz.description || '' });
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingId) return;
+
+    try {
+      setSubmitting(true);
+      const updated = await quizzesApi.update(editingId, editData);
+      setQuizzes(quizzes.map(q => q.id === editingId ? updated : q));
+      setIsEditModalOpen(false);
+      setEditingId(null);
+    } catch (err) {
+      setError('Failed to update quiz');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this quiz?')) return;
+    
+    try {
+      await quizzesApi.delete(id);
+      setQuizzes(quizzes.filter(q => q.id !== id));
+    } catch (err) {
+      setError('Failed to delete quiz');
+    }
+  };
+
   const toggleQuestionType = (type: string) => {
     setFormData(prev => ({
       ...prev,
@@ -116,33 +157,41 @@ export default function QuizzesPage() {
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
           {quizzes.map((quiz) => (
-            <Card key={quiz.id} hover>
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="p-2 bg-purple-50 rounded-lg">
-                    <Brain className="h-5 w-5 text-purple-600" />
+            <div key={quiz.id}>
+              <Card hover>
+                <CardContent className="p-5">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="p-2 bg-purple-50 rounded-lg">
+                      <Brain className="h-5 w-5 text-purple-600" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-500">{quiz.question_count} questions</span>
+                      <CardMenu
+                        onEdit={() => handleEditOpen(quiz)}
+                        onDelete={() => handleDelete(quiz.id)}
+                      />
+                    </div>
                   </div>
-                  <span className="text-sm text-gray-500">{quiz.question_count} questions</span>
-                </div>
-                <h3 className="font-semibold text-gray-900 mb-1">{quiz.title}</h3>
-                {quiz.description && (
-                  <p className="text-sm text-gray-600 line-clamp-2 mb-3">{quiz.description}</p>
-                )}
-                <div className="flex items-center justify-between text-xs text-gray-500 mb-4">
-                  <span className="px-2 py-1 bg-gray-100 rounded">{quiz.subject_name}</span>
-                  <div className="flex items-center gap-2">
-                    <Trophy className="h-3 w-3" />
-                    <span>{quiz.attempt_count} attempts</span>
+                  <h3 className="font-semibold text-gray-900 mb-1">{quiz.title}</h3>
+                  {quiz.description && (
+                    <p className="text-sm text-gray-600 line-clamp-2 mb-3">{quiz.description}</p>
+                  )}
+                  <div className="flex items-center justify-between text-xs text-gray-500 mb-4">
+                    <span className="px-2 py-1 bg-gray-100 rounded">{quiz.subject_name}</span>
+                    <div className="flex items-center gap-2">
+                      <Trophy className="h-3 w-3" />
+                      <span>{quiz.attempt_count} attempts</span>
+                    </div>
                   </div>
-                </div>
-                <Link href={`/quizzes/${quiz.id}`}>
-                  <Button variant="primary" size="sm" className="w-full">
-                    <Play className="h-4 w-4 mr-1" />
-                    Take Quiz
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
+                  <Link href={`/quizzes/${quiz.id}`}>
+                    <Button variant="primary" size="sm" className="w-full">
+                      <Play className="h-4 w-4 mr-1" />
+                      Take Quiz
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            </div>
           ))}
         </div>
       )}
@@ -231,6 +280,42 @@ export default function QuizzesPage() {
             </Button>
             <Button type="submit" disabled={submitting || formData.question_types.length === 0}>
               {submitting ? 'Generating...' : 'Generate Quiz'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        title="Edit Quiz"
+        size="md"
+      >
+        <form onSubmit={handleEditSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+            <Input
+              value={editData.title}
+              onChange={(e) => setEditData({ ...editData, title: e.target.value })}
+              placeholder="Quiz title"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <Textarea
+              value={editData.description}
+              onChange={(e) => setEditData({ ...editData, description: e.target.value })}
+              placeholder="Quiz description (optional)"
+              rows={3}
+            />
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button type="button" variant="outline" onClick={() => setIsEditModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? 'Saving...' : 'Save Changes'}
             </Button>
           </div>
         </form>

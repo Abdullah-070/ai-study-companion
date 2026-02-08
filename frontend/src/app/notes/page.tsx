@@ -8,6 +8,7 @@ import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Textarea from '@/components/ui/Textarea';
 import Modal from '@/components/ui/Modal';
+import CardMenu from '@/components/ui/CardMenu';
 import { Card, CardContent } from '@/components/ui/Card';
 import { LoadingPage } from '@/components/ui/Loading';
 import Alert from '@/components/ui/Alert';
@@ -20,11 +21,17 @@ export default function NotesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [formData, setFormData] = useState({
     title: '',
     content: '',
     subject_id: '',
     tags: '',
+  });
+  const [editData, setEditData] = useState({
+    title: '',
+    content: '',
   });
   const [submitting, setSubmitting] = useState(false);
   const [filterSubject, setFilterSubject] = useState<string>('');
@@ -68,6 +75,40 @@ export default function NotesPage() {
       setError('Failed to create note');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleEditOpen = (note: Note) => {
+    setEditingId(note.id);
+    setEditData({ title: note.title, content: note.content });
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingId) return;
+
+    try {
+      setSubmitting(true);
+      const updated = await notesApi.update(editingId, editData);
+      setNotes(notes.map(n => n.id === editingId ? updated : n));
+      setIsEditModalOpen(false);
+      setEditingId(null);
+    } catch (err) {
+      setError('Failed to update note');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this note?')) return;
+    
+    try {
+      await notesApi.delete(id);
+      setNotes(notes.filter(n => n.id !== id));
+    } catch (err) {
+      setError('Failed to delete note');
     }
   };
 
@@ -121,34 +162,46 @@ export default function NotesPage() {
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredNotes.map((note) => (
-            <Link key={note.id} href={`/notes/${note.id}`}>
-              <Card hover className="h-full">
+            <div key={note.id}>
+              <Card hover className="h-full relative">
                 <CardContent className="p-5">
                   <div className="flex items-start justify-between mb-3">
-                    <h3 className="font-semibold text-gray-900 line-clamp-1">{note.title}</h3>
-                    {note.summary && (
-                      <Sparkles className="h-4 w-4 text-amber-500 flex-shrink-0" />
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-600 line-clamp-3 mb-3">
-                    {truncateText(note.content, 150)}
-                  </p>
-                  <div className="flex items-center justify-between text-xs text-gray-500">
-                    <span className="px-2 py-1 bg-gray-100 rounded">{note.subject_name}</span>
-                    <span>{formatDate(note.updated_at)}</span>
-                  </div>
-                  {note.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-3">
-                      {note.tags.slice(0, 3).map((tag) => (
-                        <span key={tag} className="px-2 py-0.5 bg-primary-50 text-primary-700 text-xs rounded">
-                          {tag}
-                        </span>
-                      ))}
+                    <Link href={`/notes/${note.id}`} className="flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="font-semibold text-gray-900 line-clamp-1">{note.title}</h3>
+                        {note.summary && (
+                          <Sparkles className="h-4 w-4 text-amber-500 flex-shrink-0" />
+                        )}
+                      </div>
+                    </Link>
+                    <div className="ml-auto pl-2">
+                      <CardMenu
+                        onEdit={() => handleEditOpen(note)}
+                        onDelete={() => handleDelete(note.id)}
+                      />
                     </div>
-                  )}
+                  </div>
+                  <Link href={`/notes/${note.id}`}>
+                    <p className="text-sm text-gray-600 line-clamp-3 mb-3">
+                      {truncateText(note.content, 150)}
+                    </p>
+                    <div className="flex items-center justify-between text-xs text-gray-500">
+                      <span className="px-2 py-1 bg-gray-100 rounded">{note.subject_name}</span>
+                      <span>{formatDate(note.updated_at)}</span>
+                    </div>
+                    {note.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-3">
+                        {note.tags.slice(0, 3).map((tag) => (
+                          <span key={tag} className="px-2 py-0.5 bg-primary-50 text-primary-700 text-xs rounded">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </Link>
                 </CardContent>
               </Card>
-            </Link>
+            </div>
           ))}
         </div>
       )}
@@ -196,6 +249,38 @@ export default function NotesPage() {
             </Button>
             <Button type="submit" disabled={submitting}>
               {submitting ? 'Creating...' : 'Create Note'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Edit Modal */}
+      <Modal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        title="Edit Note"
+        size="lg"
+      >
+        <form onSubmit={handleEditSubmit} className="p-6 space-y-4">
+          <Input
+            label="Title"
+            value={editData.title}
+            onChange={(e) => setEditData({ ...editData, title: e.target.value })}
+            required
+          />
+          <Textarea
+            label="Content"
+            value={editData.content}
+            onChange={(e) => setEditData({ ...editData, content: e.target.value })}
+            rows={6}
+            required
+          />
+          <div className="flex justify-end gap-3 pt-4">
+            <Button type="button" variant="outline" onClick={() => setIsEditModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? 'Saving...' : 'Save Changes'}
             </Button>
           </div>
         </form>

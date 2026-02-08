@@ -127,6 +127,33 @@ export const lecturesApi = {
     });
   },
   
+  uploadDocument: (data: {
+    file: File;
+    title: string;
+    subject_id: number;
+    generate_summary?: boolean;
+  }) => {
+    const formData = new FormData();
+    formData.append('document', data.file);
+    formData.append('title', data.title);
+    formData.append('subject_id', String(data.subject_id));
+    formData.append('generate_summary', String(data.generate_summary ?? true));
+
+    return fetch(`${API_BASE_URL}/lectures/upload-document`, {
+      method: 'POST',
+      body: formData,
+    }).then(async (response) => {
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new ApiError(
+          response.status,
+          errorData.error || `HTTP error ${response.status}`
+        );
+      }
+      return response.json() as Promise<import('@/types').Lecture>;
+    });
+  },
+  
   create: (data: {
     title: string;
     subject_id: number;
