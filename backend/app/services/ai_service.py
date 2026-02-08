@@ -1,28 +1,27 @@
 """
-AI Service - Gemini integration for transcription, summarization, and tutoring
+AI Service - OpenAI integration for transcription, summarization, and tutoring
 """
-import google.generativeai as genai
+from openai import OpenAI
 from flask import current_app
 from typing import Optional, List, Dict
 import json
 
 
 class AIService:
-    """Service for AI-powered features using Google Gemini API."""
+    """Service for AI-powered features using OpenAI API."""
     
     def __init__(self):
-        self._model: Optional[genai.GenerativeModel] = None
+        self._client: Optional[OpenAI] = None
     
     @property
-    def model(self) -> genai.GenerativeModel:
-        """Lazy initialization of Gemini model."""
-        if self._model is None:
-            api_key = current_app.config.get('OPENAI_API_KEY')  # Using same env var name for compatibility
+    def client(self) -> OpenAI:
+        """Lazy initialization of OpenAI client."""
+        if self._client is None:
+            api_key = current_app.config.get('OPENAI_API_KEY')
             if not api_key:
-                raise ValueError("OPENAI_API_KEY (Gemini) not configured")
-            genai.configure(api_key=api_key)
-            self._model = genai.GenerativeModel('gemini-pro')
-        return self._model
+                raise ValueError("OPENAI_API_KEY not configured")
+            self._client = OpenAI(api_key=api_key)
+        return self._client
     
     def transcribe_audio(self, audio_file_path: str) -> str:
         """Note: Gemini doesn't support audio transcription. Use external service or upload as file."""
