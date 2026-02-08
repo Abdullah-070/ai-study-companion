@@ -33,6 +33,7 @@ def create_app(config_name: str = None) -> Flask:
     app.config['SQLALCHEMY_DATABASE_URI'] = database_url
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['OPENAI_API_KEY'] = os.getenv('OPENAI_API_KEY')
+    app.config['OPENAI_BASE_URL'] = os.getenv('OPENAI_BASE_URL', 'https://api.openai.com/v1')
     
     # Initialize extensions
     db.init_app(app)

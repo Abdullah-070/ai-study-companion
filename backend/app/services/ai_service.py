@@ -18,18 +18,19 @@ class AIService:
         """Lazy initialization of OpenAI client."""
         if self._client is None:
             api_key = current_app.config.get('OPENAI_API_KEY')
+            base_url = current_app.config.get('OPENAI_BASE_URL', 'https://api.openai.com/v1')
             if not api_key:
                 print("ERROR: OPENAI_API_KEY not found in config")
                 print(f"Available config keys: {list(current_app.config.keys())}")
                 raise ValueError("OPENAI_API_KEY not configured in Flask app config")
             try:
-                # Initialize OpenAI client with explicit parameters to avoid proxy issues
-                self._client = OpenAI(api_key=api_key, timeout=30.0)
+                # Initialize OpenAI client with custom base URL (for OpenRouter or other providers)
+                self._client = OpenAI(api_key=api_key, base_url=base_url, timeout=30.0)
             except TypeError as e:
                 if 'proxies' in str(e):
                     # Fallback: use environment variable directly
                     import os
-                    self._client = OpenAI(api_key=api_key, timeout=30.0)
+                    self._client = OpenAI(api_key=api_key, base_url=base_url, timeout=30.0)
                 else:
                     raise
         return self._client
