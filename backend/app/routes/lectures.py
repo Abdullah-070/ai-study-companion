@@ -5,6 +5,7 @@ from flask import Blueprint, request, jsonify
 from app import db
 from app.models import Lecture, Subject
 from app.services import ai_service, youtube_service
+from youtube_transcript_api._errors import TranscriptsDisabled
 
 lectures_bp = Blueprint('lectures', __name__)
 
@@ -75,12 +76,28 @@ def create_from_youtube():
         db.session.commit()
         
         return jsonify(lecture.to_dict()), 201
-        
+    
+    except TranscriptsDisabled as e:
+        return jsonify({
+            'error': 'Transcripts are disabled for this YouTube video',
+            'suggestion': 'Use the "Upload Audio" or "Add Manually" options instead',
+            'details': str(e)
+        }), 400
     except ValueError as e:
         return jsonify({'error': f'Invalid data format: {str(e)}'}), 400
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': f'Failed to create lecture: {str(e)}'}), 400
+        error_msg = str(e).lower()
+        
+        # Provide helpful suggestions based on error
+        if 'no transcript' in error_msg or 'not found' in error_msg:
+            return jsonify({
+                'error': 'No transcript found for this video',
+                'suggestion': 'Try a different video or use "Upload Audio" or "Add Manually" options',
+                'details': str(e)
+            }), 400
+        else:
+            return jsonify({'error': f'Failed to create lecture: {str(e)}'}), 400
 
 
 @lectures_bp.route('', methods=['POST'])

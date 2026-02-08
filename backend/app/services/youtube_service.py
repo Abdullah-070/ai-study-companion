@@ -35,6 +35,10 @@ class YouTubeService:
             
         Returns:
             Tuple of (transcript_text, duration_seconds)
+            
+        Raises:
+            TranscriptsDisabled: If transcripts are disabled for the video
+            Exception: If no transcript is found in any language
         """
         if languages is None:
             languages = ['en']
@@ -42,8 +46,15 @@ class YouTubeService:
         try:
             transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=languages)
         except NoTranscriptFound:
-            # Try auto-generated transcripts
-            transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
+            try:
+                # Try auto-generated transcripts without language preference
+                transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
+            except TranscriptsDisabled:
+                raise TranscriptsDisabled(f'Transcripts are disabled for video {video_id}. Please use manual transcription or audio upload.')
+            except NoTranscriptFound:
+                raise Exception(f'No transcript found for video {video_id}. Try a different video or use manual transcription/audio upload.')
+        except TranscriptsDisabled:
+            raise TranscriptsDisabled(f'Transcripts are disabled for video {video_id}. Please use manual transcription or audio upload.')
         
         # Combine transcript parts
         full_text = ' '.join([entry['text'] for entry in transcript_list])
