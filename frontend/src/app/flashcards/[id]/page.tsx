@@ -7,6 +7,10 @@ import { FlashcardSet, Flashcard } from '@/types';
 import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { Edit2, Trash2 } from 'lucide-react';
+import Input from '@/components/ui/Input';
+import Textarea from '@/components/ui/Textarea';
+import Modal from '@/components/ui/Modal';
 
 export default function FlashcardSetPage() {
   const params = useParams();
@@ -18,6 +22,9 @@ export default function FlashcardSetPage() {
   const [error, setError] = useState('');
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editData, setEditData] = useState({ title: '', description: '' });
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -25,6 +32,7 @@ export default function FlashcardSetPage() {
         setLoading(true);
         const setData = await flashcardsApi.getSet(parseInt(flashcardSetId));
         setSet(setData);
+        setEditData({ title: setData.title, description: setData.description || '' });
         
         // Flashcards are typically fetched from backend or embedded in the set
         // For now, assuming they're requested as separate items or embedded
@@ -43,6 +51,32 @@ export default function FlashcardSetPage() {
       loadData();
     }
   }, [flashcardSetId]);
+
+  const handleEditSet = async () => {
+    if (!set) return;
+    try {
+      setSubmitting(true);
+      const updated = await flashcardsApi.updateSet(parseInt(flashcardSetId), editData);
+      setSet(updated);
+      setIsEditModalOpen(false);
+    } catch (err) {
+      setError('Failed to update flashcard set');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteSet = async () => {
+    if (!window.confirm('Are you sure you want to delete this flashcard set?')) {
+      return;
+    }
+    try {
+      await flashcardsApi.deleteSet(parseInt(flashcardSetId));
+      router.push('/flashcards');
+    } catch (err) {
+      setError('Failed to delete flashcard set');
+    }
+  };
 
   if (loading) {
     return (
@@ -68,11 +102,35 @@ export default function FlashcardSetPage() {
   return (
     <div className="p-8 max-w-2xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-4xl font-bold mb-4">{set.title}</h1>
-        <p className="text-gray-600">
-          Card {currentIndex + 1} of {flashcards.length}
-        </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-4xl font-bold mb-4">{set.title}</h1>
+            <p className="text-gray-600">
+              Card {currentIndex + 1} of {flashcards.length}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => setIsEditModalOpen(true)}
+              variant="secondary"
+              className="flex items-center gap-2"
+            >
+              <Edit2 className="h-4 w-4" />
+              Edit
+            </Button>
+            <Button
+              onClick={handleDeleteSet}
+              variant="secondary"
+              className="flex items-center gap-2 text-red-600 hover:text-red-700"
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete
+            </Button>
+          </div>
+        </div>
       </div>
+
+      {error && <Alert type="error" className="mb-6">{error}</Alert>}
 
       {/* Flashcard */}
       <Card
@@ -134,6 +192,37 @@ export default function FlashcardSetPage() {
           Back
         </Button>
       </div>
+
+      {/* Edit Modal */}
+      <Modal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        title="Edit Flashcard Set"
+        size="lg"
+      >
+        <form onSubmit={(e) => { e.preventDefault(); handleEditSet(); }} className="p-6 space-y-4">
+          <Input
+            label="Title"
+            value={editData.title}
+            onChange={(e) => setEditData({ ...editData, title: e.target.value })}
+            required
+          />
+          <Textarea
+            label="Description"
+            value={editData.description}
+            onChange={(e) => setEditData({ ...editData, description: e.target.value })}
+            rows={3}
+          />
+          <div className="flex justify-end gap-3 pt-4">
+            <Button type="button" variant="outline" onClick={() => setIsEditModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

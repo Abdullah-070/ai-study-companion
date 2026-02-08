@@ -7,6 +7,10 @@ import { Quiz, QuizQuestion, QuizAttempt } from '@/types';
 import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { Edit2, Trash2 } from 'lucide-react';
+import Input from '@/components/ui/Input';
+import Textarea from '@/components/ui/Textarea';
+import Modal from '@/components/ui/Modal';
 
 export default function QuizPage() {
   const params = useParams();
@@ -20,6 +24,9 @@ export default function QuizPage() {
   const [selectedAnswers, setSelectedAnswers] = useState<Record<number, string>>({});
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState<number | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editData, setEditData] = useState({ title: '', description: '' });
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -27,6 +34,7 @@ export default function QuizPage() {
         setLoading(true);
         const quizData = await quizzesApi.getById(parseInt(quizId));
         setQuiz(quizData);
+        setEditData({ title: quizData.title, description: quizData.description || '' });
         
         // Questions are typically embedded in the quiz response
         // or fetched separately - adjust based on your backend
@@ -44,6 +52,32 @@ export default function QuizPage() {
       loadData();
     }
   }, [quizId]);
+
+  const handleEditQuiz = async () => {
+    if (!quiz) return;
+    try {
+      setSubmitting(true);
+      const updated = await quizzesApi.update(parseInt(quizId), editData);
+      setQuiz(updated);
+      setIsEditModalOpen(false);
+    } catch (err) {
+      setError('Failed to update quiz');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteQuiz = async () => {
+    if (!window.confirm('Are you sure you want to delete this quiz?')) {
+      return;
+    }
+    try {
+      await quizzesApi.delete(parseInt(quizId));
+      router.push('/quizzes');
+    } catch (err) {
+      setError('Failed to delete quiz');
+    }
+  };
 
   if (loading) {
     return (
@@ -101,11 +135,35 @@ export default function QuizPage() {
   return (
     <div className="p-8 max-w-2xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-4xl font-bold mb-4">{quiz.title}</h1>
-        <p className="text-gray-600">
-          Question {currentIndex + 1} of {questions.length}
-        </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-4xl font-bold mb-4">{quiz.title}</h1>
+            <p className="text-gray-600">
+              Question {currentIndex + 1} of {questions.length}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => setIsEditModalOpen(true)}
+              variant="secondary"
+              className="flex items-center gap-2"
+            >
+              <Edit2 className="h-4 w-4" />
+              Edit
+            </Button>
+            <Button
+              onClick={handleDeleteQuiz}
+              variant="secondary"
+              className="flex items-center gap-2 text-red-600 hover:text-red-700"
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete
+            </Button>
+          </div>
+        </div>
       </div>
+
+      {error && <Alert type="error" className="mb-6">{error}</Alert>}
 
       {/* Question */}
       <Card className="mb-8">
@@ -170,6 +228,37 @@ export default function QuizPage() {
           style={{ width: `${((currentIndex + 1) / questions.length) * 100}%` }}
         />
       </div>
+
+      {/* Edit Modal */}
+      <Modal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        title="Edit Quiz"
+        size="lg"
+      >
+        <form onSubmit={(e) => { e.preventDefault(); handleEditQuiz(); }} className="p-6 space-y-4">
+          <Input
+            label="Title"
+            value={editData.title}
+            onChange={(e) => setEditData({ ...editData, title: e.target.value })}
+            required
+          />
+          <Textarea
+            label="Description"
+            value={editData.description}
+            onChange={(e) => setEditData({ ...editData, description: e.target.value })}
+            rows={3}
+          />
+          <div className="flex justify-end gap-3 pt-4">
+            <Button type="button" variant="outline" onClick={() => setIsEditModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

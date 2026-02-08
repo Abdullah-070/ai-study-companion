@@ -103,7 +103,11 @@ export default function LecturesPage() {
       setLectures([newLecture, ...lectures]);
       setIsModalOpen(false);
     } catch (err: any) {
-      setError(err.message || 'Failed to create lecture');
+      let errorMessage = err.message || 'Failed to create lecture';
+      if (err.suggestion) {
+        errorMessage += `\n\n💡 Tip: ${err.suggestion}`;
+      }
+      setError(errorMessage);
     } finally {
       setSubmitting(false);
     }

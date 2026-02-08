@@ -1,6 +1,6 @@
 'use client';
 
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { lecturesApi, notesApi } from '@/lib/api';
 import { Lecture, Note } from '@/types';
@@ -8,14 +8,22 @@ import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import Link from 'next/link';
+import { Edit2, Trash2 } from 'lucide-react';
+import Input from '@/components/ui/Input';
+import Textarea from '@/components/ui/Textarea';
+import Modal from '@/components/ui/Modal';
 
 export default function LecturePage() {
   const params = useParams();
+  const router = useRouter();
   const lectureId = params.id as string;
   const [lecture, setLecture] = useState<Lecture | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editData, setEditData] = useState({ title: '', transcription: '' });
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -23,6 +31,7 @@ export default function LecturePage() {
         setLoading(true);
         const lectureData = await lecturesApi.getById(parseInt(lectureId));
         setLecture(lectureData);
+        setEditData({ title: lectureData.title, transcription: lectureData.transcription || '' });
         
         const notesData = await notesApi.getAll(undefined, parseInt(lectureId));
         setNotes(notesData);
@@ -40,6 +49,31 @@ export default function LecturePage() {
     }
   }, [lectureId]);
 
+  const handleEdit = async () => {
+    try {
+      setSubmitting(true);
+      const updated = await lecturesApi.update(parseInt(lectureId), editData);
+      setLecture(updated);
+      setIsEditModalOpen(false);
+    } catch (err) {
+      setError('Failed to update lecture');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm('Are you sure you want to delete this lecture?')) {
+      return;
+    }
+    try {
+      await lecturesApi.delete(parseInt(lectureId));
+      router.push('/lectures');
+    } catch (err) {
+      setError('Failed to delete lecture');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -52,7 +86,7 @@ export default function LecturePage() {
     return (
       <div className="p-8">
         <Alert type="error">{error || 'Lecture not found'}</Alert>
-        <Button onClick={() => window.history.back()} className="mt-4">
+        <Button onClick={() => router.back()} className="mt-4">
           Go Back
         </Button>
       </div>
@@ -62,23 +96,47 @@ export default function LecturePage() {
   return (
     <div className="p-8">
       <div className="mb-8">
-        <h1 className="text-4xl font-bold mb-4">{lecture.title}</h1>
-        <div className="flex gap-4 text-gray-600 mb-4">
-          {lecture.source_type === 'youtube' && lecture.source_url && (
-            <a
-              href={lecture.source_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 hover:underline"
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h1 className="text-4xl font-bold mb-4">{lecture.title}</h1>
+            <div className="flex gap-4 text-gray-600 mb-4">
+              {lecture.source_type === 'youtube' && lecture.source_url && (
+                <a
+                  href={lecture.source_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:underline"
+                >
+                  ▶️ Watch on YouTube
+                </a>
+              )}
+              {lecture.duration_seconds && (
+                <span>⏱️ {Math.round(lecture.duration_seconds / 60)} minutes</span>
+              )}
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => setIsEditModalOpen(true)}
+              variant="secondary"
+              className="flex items-center gap-2"
             >
-              ▶️ Watch on YouTube
-            </a>
-          )}
-          {lecture.duration_seconds && (
-            <span>⏱️ {Math.round(lecture.duration_seconds / 60)} minutes</span>
-          )}
+              <Edit2 className="h-4 w-4" />
+              Edit
+            </Button>
+            <Button
+              onClick={handleDelete}
+              variant="secondary"
+              className="flex items-center gap-2 text-red-600 hover:text-red-700"
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete
+            </Button>
+          </div>
         </div>
       </div>
+
+      {error && <Alert type="error" className="mb-6">{error}</Alert>}
 
       {lecture.summary && (
         <Card className="mb-8 bg-blue-50 border-blue-200">
@@ -116,7 +174,38 @@ export default function LecturePage() {
         </div>
       )}
 
-      <Button onClick={() => window.history.back()}>Go Back</Button>
+      <Button onClick={() => router.back()}>Go Back</Button>
+
+      {/* Edit Modal */}
+      <Modal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        title="Edit Lecture"
+        size="lg"
+      >
+        <form onSubmit={(e) => { e.preventDefault(); handleEdit(); }} className="p-6 space-y-4">
+          <Input
+            label="Title"
+            value={editData.title}
+            onChange={(e) => setEditData({ ...editData, title: e.target.value })}
+            required
+          />
+          <Textarea
+            label="Transcription"
+            value={editData.transcription}
+            onChange={(e) => setEditData({ ...editData, transcription: e.target.value })}
+            rows={8}
+          />
+          <div className="flex justify-end gap-3 pt-4">
+            <Button type="button" variant="outline" onClick={() => setIsEditModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

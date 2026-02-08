@@ -5,7 +5,12 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
 class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(
+    public status: number,
+    message: string,
+    public suggestion?: string,
+    public details?: string
+  ) {
     super(message);
     this.name = 'ApiError';
   }
@@ -33,7 +38,9 @@ async function fetchApi<T>(
     const errorData = await response.json().catch(() => ({}));
     throw new ApiError(
       response.status,
-      errorData.error || `HTTP error ${response.status}`
+      errorData.error || `HTTP error ${response.status}`,
+      errorData.suggestion,
+      errorData.details
     );
   }
 
