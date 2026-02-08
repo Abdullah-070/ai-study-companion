@@ -156,3 +156,127 @@ def delete_lecture(lecture_id: int):
     db.session.commit()
     
     return jsonify({'message': 'Lecture deleted successfully'})
+
+
+@lectures_bp.route('/manual-transcription', methods=['POST'])
+def create_with_manual_transcription():
+    """Create a lecture with manually provided transcription."""
+    data = request.get_json()
+    
+    if not data or not data.get('title'):
+        return jsonify({'error': 'Title is required'}), 400
+    
+    if not data.get('transcription'):
+        return jsonify({'error': 'Transcription text is required'}), 400
+    
+    if not data.get('subject_id'):
+        return jsonify({'error': 'Subject ID is required'}), 400
+    
+    # Verify subject exists
+    subject = Subject.query.get_or_404(data['subject_id'])
+    
+    try:
+        # Generate summary if requested
+        summary = None
+        if data.get('generate_summary', True):
+            try:
+                summary = ai_service.summarize_text(data['transcription'])
+            except Exception as e:
+                print(f"Summary generation failed: {e}")
+                # Continue without summary
+        
+        lecture = Lecture(
+            title=data['title'],
+            source_type='manual',
+            source_url=None,
+            transcription=data['transcription'],
+            summary=summary,
+            duration_seconds=data.get('duration_seconds'),
+            subject_id=subject.id
+        )
+        
+        db.session.add(lecture)
+        db.session.commit()
+        
+        return jsonify(lecture.to_dict()), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to create lecture: {str(e)}'}), 400
+
+
+@lectures_bp.route('/upload-audio', methods=['POST'])
+def upload_audio():
+    """Create a lecture from uploaded audio file using Whisper."""
+    if 'audio' not in request.files:
+        return jsonify({'error': 'Audio file is required'}), 400
+    
+    if not request.form.get('title'):
+        return jsonify({'error': 'Title is required'}), 400
+    
+    if not request.form.get('subject_id'):
+        return jsonify({'error': 'Subject ID is required'}), 400
+    
+    try:
+        subject_id = int(request.form.get('subject_id'))
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Subject ID must be a number'}), 400
+    
+    # Verify subject exists
+    subject = Subject.query.get_or_404(subject_id)
+    
+    audio_file = request.files['audio']
+    
+    # Validate file
+    if not audio_file.filename:
+        return jsonify({'error': 'No file selected'}), 400
+    
+    allowed_extensions = {'wav', 'mp3', 'm4a', 'ogg', 'flac', 'webm'}
+    file_ext = audio_file.filename.rsplit('.', 1)[1].lower() if '.' in audio_file.filename else ''
+    
+    if file_ext not in allowed_extensions:
+        return jsonify({'error': f'File type .{file_ext} not supported. Allowed: {", ".join(allowed_extensions)}'}), 400
+    
+    try:
+        # Save file temporarily
+        import tempfile
+        import os
+        
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f'.{file_ext}') as tmp:
+            audio_file.save(tmp.name)
+            tmp_path = tmp.name
+        
+        # Transcribe using Whisper
+        transcription = ai_service.transcribe_audio(tmp_path)
+        
+        # Clean up temp file
+        os.unlink(tmp_path)
+        
+        # Generate summary if requested
+        summary = None
+        if request.form.get('generate_summary') == 'true':
+            try:
+                summary = ai_service.summarize_text(transcription)
+            except Exception as e:
+                print(f"Summary generation failed: {e}")
+                # Continue without summary
+        
+        # Create lecture
+        lecture = Lecture(
+            title=request.form.get('title'),
+            source_type='upload',
+            source_url=None,
+            transcription=transcription,
+            summary=summary,
+            duration_seconds=request.form.get('duration_seconds', type=int),
+            subject_id=subject.id
+        )
+        
+        db.session.add(lecture)
+        db.session.commit()
+        
+        return jsonify(lecture.to_dict()), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to process audio: {str(e)}'}), 400
