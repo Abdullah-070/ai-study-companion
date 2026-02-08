@@ -92,6 +92,13 @@ def generate_flashcards():
         num_cards = data.get('num_cards', 10)
         generated_cards = ai_service.generate_flashcards(content, num_cards)
         
+        # Validate that we got cards
+        if not isinstance(generated_cards, list):
+            return jsonify({'error': f'Invalid flashcard format received from AI: {type(generated_cards)}'}), 500
+        
+        if len(generated_cards) == 0:
+            return jsonify({'error': 'AI failed to generate flashcards'}), 500
+        
         # Create flashcard set
         flashcard_set = FlashcardSet(
             title=data.get('title', default_title),
@@ -103,12 +110,14 @@ def generate_flashcards():
         
         # Create flashcards
         for card_data in generated_cards:
-            flashcard = Flashcard(
-                front=card_data['front'],
-                back=card_data['back'],
-                flashcard_set_id=flashcard_set.id
-            )
-            db.session.add(flashcard)
+            # Ensure card_data has the required fields
+            if isinstance(card_data, dict) and 'front' in card_data and 'back' in card_data:
+                flashcard = Flashcard(
+                    front=card_data['front'],
+                    back=card_data['back'],
+                    flashcard_set_id=flashcard_set.id
+                )
+                db.session.add(flashcard)
         
         db.session.commit()
         
@@ -118,7 +127,10 @@ def generate_flashcards():
         
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        import traceback
+        print(f"Flashcard generation error: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({'error': f'Failed to generate flashcards: {str(e)}'}), 500
 
 
 @flashcards_bp.route('/sets/<int:set_id>', methods=['PUT'])
