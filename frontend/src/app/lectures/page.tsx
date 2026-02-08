@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Youtube, BookOpen, FileText, Sparkles } from 'lucide-react';
+import { Plus, Youtube, BookOpen, FileText, Sparkles, Upload } from 'lucide-react';
 import { lecturesApi, subjectsApi } from '@/lib/api';
 import { Lecture, Subject } from '@/types';
 import Button from '@/components/ui/Button';
@@ -20,7 +20,7 @@ export default function LecturesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalType, setModalType] = useState<'youtube' | 'manual'>('youtube');
+  const [modalType, setModalType] = useState<'youtube' | 'manual' | 'audio'>('youtube');
   const [formData, setFormData] = useState({
     title: '',
     url: '',
@@ -28,6 +28,7 @@ export default function LecturesPage() {
     transcription: '',
     generate_summary: true,
   });
+  const [audioFile, setAudioFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -51,7 +52,7 @@ export default function LecturesPage() {
     }
   };
 
-  const openModal = (type: 'youtube' | 'manual') => {
+  const openModal = (type: 'youtube' | 'manual' | 'audio') => {
     setModalType(type);
     setFormData({
       title: '',
@@ -60,6 +61,7 @@ export default function LecturesPage() {
       transcription: '',
       generate_summary: true,
     });
+    setAudioFile(null);
     setIsModalOpen(true);
   };
 
@@ -78,11 +80,23 @@ export default function LecturesPage() {
           title: formData.title || undefined,
           generate_summary: formData.generate_summary,
         });
+      } else if (modalType === 'audio') {
+        if (!audioFile) {
+          setError('Please select an audio file');
+          return;
+        }
+        newLecture = await lecturesApi.uploadAudio({
+          file: audioFile,
+          title: formData.title,
+          subject_id: parseInt(formData.subject_id),
+          generate_summary: formData.generate_summary,
+        });
       } else {
-        newLecture = await lecturesApi.create({
+        newLecture = await lecturesApi.createManualTranscription({
           title: formData.title,
           subject_id: parseInt(formData.subject_id),
           transcription: formData.transcription,
+          generate_summary: formData.generate_summary,
         });
       }
 
@@ -106,6 +120,10 @@ export default function LecturesPage() {
           <p className="text-gray-500 mt-1">Transcribe and organize your lecture content</p>
         </div>
         <div className="flex gap-3">
+          <Button variant="outline" onClick={() => openModal('audio')}>
+            <Upload className="h-4 w-4 mr-2" />
+            Upload Audio
+          </Button>
           <Button variant="outline" onClick={() => openModal('manual')}>
             <Plus className="h-4 w-4 mr-2" />
             Add Manually
@@ -198,7 +216,13 @@ export default function LecturesPage() {
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={modalType === 'youtube' ? 'Add YouTube Lecture' : 'Add Lecture Manually'}
+        title={
+          modalType === 'youtube'
+            ? 'Add YouTube Lecture'
+            : modalType === 'audio'
+            ? 'Upload Audio Lecture'
+            : 'Add Lecture Manually'
+        }
         size="lg"
       >
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
@@ -244,6 +268,42 @@ export default function LecturesPage() {
                 <span className="text-sm text-gray-700">Generate AI summary</span>
               </label>
             </>
+          ) : modalType === 'audio' ? (
+            <>
+              <Input
+                label="Title"
+                placeholder="Lecture title"
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                required
+              />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Audio File (WAV, MP3, M4A, OGG, FLAC, WebM)
+                </label>
+                <input
+                  type="file"
+                  accept="audio/*"
+                  onChange={(e) => setAudioFile(e.target.files?.[0] || null)}
+                  className="block w-full text-sm text-gray-500
+                    file:mr-4 file:py-2 file:px-4
+                    file:rounded-lg file:border-0
+                    file:text-sm file:font-semibold
+                    file:bg-primary-50 file:text-primary-700
+                    hover:file:bg-primary-100"
+                  required
+                />
+              </div>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={formData.generate_summary}
+                  onChange={(e) => setFormData({ ...formData, generate_summary: e.target.checked })}
+                  className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                />
+                <span className="text-sm text-gray-700">Generate AI summary</span>
+              </label>
+            </>
           ) : (
             <>
               <Input
@@ -259,7 +319,17 @@ export default function LecturesPage() {
                 value={formData.transcription}
                 onChange={(e) => setFormData({ ...formData, transcription: e.target.value })}
                 rows={8}
+                required
               />
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={formData.generate_summary}
+                  onChange={(e) => setFormData({ ...formData, generate_summary: e.target.checked })}
+                  className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                />
+                <span className="text-sm text-gray-700">Generate AI summary</span>
+              </label>
             </>
           )}
 
@@ -271,9 +341,13 @@ export default function LecturesPage() {
               {submitting
                 ? modalType === 'youtube'
                   ? 'Processing...'
+                  : modalType === 'audio'
+                  ? 'Transcribing...'
                   : 'Creating...'
                 : modalType === 'youtube'
                 ? 'Import & Transcribe'
+                : modalType === 'audio'
+                ? 'Upload & Transcribe'
                 : 'Create Lecture'}
             </Button>
           </div>

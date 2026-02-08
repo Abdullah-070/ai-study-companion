@@ -82,6 +82,44 @@ export const lecturesApi = {
       body: JSON.stringify(data),
     }),
   
+  createManualTranscription: (data: {
+    title: string;
+    subject_id: number;
+    transcription: string;
+    generate_summary?: boolean;
+  }) =>
+    fetchApi<import('@/types').Lecture>('/lectures/manual-transcription', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  uploadAudio: (data: {
+    file: File;
+    title: string;
+    subject_id: number;
+    generate_summary?: boolean;
+  }) => {
+    const formData = new FormData();
+    formData.append('audio', data.file);
+    formData.append('title', data.title);
+    formData.append('subject_id', String(data.subject_id));
+    formData.append('generate_summary', String(data.generate_summary ?? true));
+
+    return fetch(`${API_BASE_URL}/lectures/upload-audio`, {
+      method: 'POST',
+      body: formData,
+    }).then(async (response) => {
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new ApiError(
+          response.status,
+          errorData.error || `HTTP error ${response.status}`
+        );
+      }
+      return response.json() as Promise<import('@/types').Lecture>;
+    });
+  },
+  
   create: (data: {
     title: string;
     subject_id: number;
