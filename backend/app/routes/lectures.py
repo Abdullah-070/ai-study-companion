@@ -32,18 +32,21 @@ def get_lecture(lecture_id: int):
 @lectures_bp.route('/youtube', methods=['POST'])
 def create_from_youtube():
     """Create a lecture from a YouTube video."""
-    data = request.get_json()
+    data = request.get_json() or {}
     
-    if not data or not data.get('url'):
+    if not data.get('url'):
         return jsonify({'error': 'YouTube URL is required'}), 400
     
-    if not data.get('subject_id'):
+    subject_id = data.get('subject_id')
+    if not subject_id:
         return jsonify({'error': 'Subject ID is required'}), 400
     
-    # Verify subject exists
-    subject = Subject.query.get_or_404(data['subject_id'])
-    
     try:
+        # Verify subject exists
+        subject = Subject.query.get(subject_id)
+        if not subject:
+            return jsonify({'error': f'Subject with ID {subject_id} not found'}), 404
+        
         # Extract video info and transcript
         video_info = youtube_service.get_video_info(data['url'])
         transcript, duration = youtube_service.get_transcript(video_info['video_id'])
@@ -51,11 +54,15 @@ def create_from_youtube():
         # Generate summary if requested
         summary = None
         if data.get('generate_summary', True):
-            summary = ai_service.summarize_text(transcript)
+            try:
+                summary = ai_service.summarize_text(transcript)
+            except Exception as e:
+                print(f"Summary generation failed: {e}")
+                # Continue without summary
         
         # Create lecture
         lecture = Lecture(
-            title=data.get('title', f"YouTube Lecture - {video_info['video_id']}"),
+            title=data.get('title') or f"YouTube Lecture - {video_info['video_id']}",
             source_type='youtube',
             source_url=data['url'],
             transcription=transcript,
@@ -69,8 +76,11 @@ def create_from_youtube():
         
         return jsonify(lecture.to_dict()), 201
         
+    except ValueError as e:
+        return jsonify({'error': f'Invalid data format: {str(e)}'}), 400
     except Exception as e:
-        return jsonify({'error': str(e)}), 400
+        db.session.rollback()
+        return jsonify({'error': f'Failed to create lecture: {str(e)}'}), 400
 
 
 @lectures_bp.route('', methods=['POST'])
