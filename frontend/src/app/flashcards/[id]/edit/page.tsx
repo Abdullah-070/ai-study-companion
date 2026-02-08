@@ -50,14 +50,12 @@ export default function EditFlashcardSetPage() {
 
   const handleSaveEdit = async (index: number, cardId: number) => {
     try {
-      // This would require a PUT endpoint for individual flashcards
-      // For now, we'll just update the local state
-      const updatedFlashcards = [...flashcards];
-      updatedFlashcards[index] = {
-        ...updatedFlashcards[index],
+      const updated = await flashcardsApi.updateCard(cardId, {
         front: newFront,
         back: newBack,
-      };
+      });
+      const updatedFlashcards = [...flashcards];
+      updatedFlashcards[index] = updated;
       setFlashcards(updatedFlashcards);
       setEditingCard(null);
       setSuccess('Card updated');
@@ -67,33 +65,35 @@ export default function EditFlashcardSetPage() {
     }
   };
 
-  const handleDeleteCard = (index: number) => {
-    const updatedFlashcards = flashcards.filter((_, i) => i !== index);
-    setFlashcards(updatedFlashcards);
-    setSuccess('Card deleted');
-    setTimeout(() => setSuccess(''), 3000);
+  const handleDeleteCard = async (index: number, cardId: number) => {
+    if (!window.confirm('Delete this card?')) return;
+    try {
+      await flashcardsApi.deleteCard(cardId);
+      const updatedFlashcards = flashcards.filter((_, i) => i !== index);
+      setFlashcards(updatedFlashcards);
+      setSuccess('Card deleted');
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      setError('Failed to delete card');
+    }
   };
 
-  const handleAddCard = () => {
+  const handleAddCard = async () => {
     if (newFront.trim() && newBack.trim()) {
-      const newCard: Flashcard = {
-        id: Math.max(0, ...flashcards.map(c => c.id || 0)) + 1,
-        flashcard_set_id: parseInt(flashcardSetId),
-        front: newFront,
-        back: newBack,
-        difficulty: 0,
-        times_reviewed: 0,
-        times_correct: 0,
-        accuracy: null,
-        last_reviewed: null,
-        next_review: null,
-        created_at: new Date().toISOString(),
-      };
-      setFlashcards([...flashcards, newCard]);
-      setNewFront('');
-      setNewBack('');
-      setSuccess('Card added');
-      setTimeout(() => setSuccess(''), 3000);
+      try {
+        const newCard = await flashcardsApi.createCard({
+          front: newFront,
+          back: newBack,
+          flashcard_set_id: parseInt(flashcardSetId),
+        });
+        setFlashcards([...flashcards, newCard]);
+        setNewFront('');
+        setNewBack('');
+        setSuccess('Card added');
+        setTimeout(() => setSuccess(''), 3000);
+      } catch (err) {
+        setError('Failed to add card');
+      }
     }
   };
 
@@ -223,7 +223,7 @@ export default function EditFlashcardSetPage() {
                     Edit
                   </Button>
                   <Button
-                    onClick={() => handleDeleteCard(index)}
+                    onClick={() => handleDeleteCard(index, card.id)}
                     className="flex-1"
                     variant="secondary"
                   >
