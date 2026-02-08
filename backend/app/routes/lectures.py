@@ -297,3 +297,83 @@ def upload_audio():
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': f'Failed to process audio: {str(e)}'}), 400
+
+@lectures_bp.route('/upload-document', methods=['POST'])
+def upload_document():
+    """Create a lecture from uploaded document file (PDF, DOCX, PPTX)."""
+    if 'document' not in request.files:
+        return jsonify({'error': 'Document file is required'}), 400
+    
+    if not request.form.get('title'):
+        return jsonify({'error': 'Title is required'}), 400
+    
+    if not request.form.get('subject_id'):
+        return jsonify({'error': 'Subject ID is required'}), 400
+    
+    try:
+        subject_id = int(request.form.get('subject_id'))
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Subject ID must be a number'}), 400
+    
+    # Verify subject exists
+    subject = Subject.query.get_or_404(subject_id)
+    
+    doc_file = request.files['document']
+    
+    # Validate file
+    if not doc_file.filename:
+        return jsonify({'error': 'No file selected'}), 400
+    
+    allowed_extensions = {'pdf', 'docx', 'doc', 'pptx', 'ppt'}
+    file_ext = doc_file.filename.rsplit('.', 1)[1].lower() if '.' in doc_file.filename else ''
+    
+    if file_ext not in allowed_extensions:
+        return jsonify({'error': f'File type .{file_ext} not supported. Allowed: PDF, DOCX, PPTX'}), 400
+    
+    try:
+        import tempfile
+        import os
+        from app.services import document_service
+        
+        # Save file temporarily
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f'.{file_ext}') as tmp:
+            doc_file.save(tmp.name)
+            tmp_path = tmp.name
+        
+        # Extract text from document
+        text_content = document_service.extract_text_from_document(tmp_path, file_ext)
+        
+        # Clean up temp file
+        os.unlink(tmp_path)
+        
+        if not text_content or not text_content.strip():
+            return jsonify({'error': 'No text content found in the document'}), 400
+        
+        # Generate summary if requested
+        summary = None
+        if request.form.get('generate_summary') == 'true':
+            try:
+                summary = ai_service.summarize_text(text_content)
+            except Exception as e:
+                print(f"Summary generation failed: {e}")
+                # Continue without summary
+        
+        # Create lecture
+        lecture = Lecture(
+            title=request.form.get('title'),
+            source_type='document',
+            source_url=None,
+            transcription=text_content,
+            summary=summary,
+            duration_seconds=None,
+            subject_id=subject.id
+        )
+        
+        db.session.add(lecture)
+        db.session.commit()
+        
+        return jsonify(lecture.to_dict()), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to process document: {str(e)}'}), 400
