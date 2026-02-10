@@ -39,12 +39,9 @@ def init_oauth(app):
 @oauth_bp.route('/google/authorize', methods=['GET'])
 def google_authorize():
     """Initiate Google OAuth flow"""
-    from authlib.integrations.flask_client import oauth as oauth_instance
-    
-    google = oauth_instance.google
     redirect_uri = request.args.get('redirect_uri', url_for('oauth.google_callback', _external=True))
     
-    return google.authorize_redirect(redirect_uri)
+    return oauth.google.authorize_redirect(redirect_uri)
 
 
 @oauth_bp.route('/google/callback', methods=['GET'])
@@ -112,25 +109,19 @@ def google_callback():
 @oauth_bp.route('/github/authorize', methods=['GET'])
 def github_authorize():
     """Initiate GitHub OAuth flow"""
-    from authlib.integrations.flask_client import oauth as oauth_instance
-    
-    github = oauth_instance.github
     redirect_uri = request.args.get('redirect_uri', url_for('oauth.github_callback', _external=True))
     
-    return github.authorize_redirect(redirect_uri)
+    return oauth.github.authorize_redirect(redirect_uri)
 
 
 @oauth_bp.route('/github/callback', methods=['GET'])
 def github_callback():
     """Handle GitHub OAuth callback"""
-    from authlib.integrations.flask_client import oauth as oauth_instance
-    
     try:
-        github = oauth_instance.github
-        token = github.authorize_access_token()
+        token = oauth.github.authorize_access_token()
         
         # Get user info from GitHub
-        resp = github.get('user', token=token)
+        resp = oauth.github.get('user', token=token)
         user_data = resp.json()
         
         email = user_data.get('email')

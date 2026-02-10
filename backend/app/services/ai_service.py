@@ -1,30 +1,26 @@
 """
-AI Service - Google Gemini integration for transcription, summarization, and tutoring
+AI Service - OpenAI integration for transcription, summarization, and tutoring
 """
-import google.genai as genai
+from openai import OpenAI
 from flask import current_app
 from typing import Optional, List, Dict
 import json
 
 
 class AIService:
-    """Service for AI-powered features using Google Gemini API."""
+    """Service for AI-powered features using OpenAI API."""
     
     def __init__(self):
         self._client = None
-        self._model_name = "gemini-pro"
     
     @property
     def client(self):
-        """Initialize Gemini client."""
+        """Initialize OpenAI client."""
         if self._client is None:
-            api_key = current_app.config.get('GEMINI_API_KEY')
+            api_key = current_app.config.get('OPENAI_API_KEY')
             if not api_key:
-                print("ERROR: GEMINI_API_KEY not found in config")
-                print(f"Available config keys: {list(current_app.config.keys())}")
-                raise ValueError("GEMINI_API_KEY not configured in Flask app config")
-            genai.configure(api_key=api_key)
-            self._client = genai.GenerativeModel(self._model_name)
+                raise ValueError("OPENAI_API_KEY not configured in Flask app config")
+            self._client = OpenAI(api_key=api_key)
         return self._client
     
     def transcribe_audio(self, audio_file_path: str) -> str:
@@ -42,26 +38,28 @@ class AIService:
             raise Exception(f"Audio transcription failed: {str(e)}. Please use manual input or provide audio URL.")
     
     def summarize_text(self, text: str, max_length: int = 500) -> str:
-        """Generate a summary of the given text using Google Gemini."""
+        """Generate a summary of the given text using OpenAI."""
         prompt = f"""You are an expert summarizer. Create a clear, concise summary of the following content in approximately {max_length} words. Focus on key concepts, main ideas, and important details that would be useful for studying.
 
 Content to summarize:
 {text}"""
         
         try:
-            response = self.client.generate_content(
-                prompt,
-                generation_config=genai.types.GenerationConfig(
-                    temperature=0.7,
-                    max_output_tokens=1000,
-                )
+            response = self.client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are an expert summarizer."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                max_tokens=1000,
             )
-            return response.text
+            return response.choices[0].message.content
         except Exception as e:
             raise Exception(f"Text summarization failed: {str(e)}")
     
     def generate_flashcards(self, content: str, num_cards: int = 10) -> List[Dict[str, str]]:
-        """Generate flashcards from study content using Google Gemini."""
+        """Generate flashcards from study content using OpenAI."""
         prompt = f"""You are an expert educator creating flashcards for students. 
 Generate exactly {num_cards} flashcards from the provided content.
 Each flashcard should have a clear question/term on the front and a concise answer/definition on the back.
@@ -75,14 +73,16 @@ Content:
 {content}"""
         
         try:
-            response = self.client.generate_content(
-                prompt,
-                generation_config=genai.types.GenerationConfig(
-                    temperature=0.7,
-                    max_output_tokens=2000,
-                )
+            response = self.client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are an expert educator creating flashcards."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                max_tokens=2000,
             )
-            content_text = response.text.strip()
+            content_text = response.choices[0].message.content.strip()
             
             # Try to extract JSON from the response
             if content_text.startswith('['):
@@ -114,7 +114,7 @@ Content:
         num_questions: int = 5,
         question_types: List[str] = None
     ) -> List[Dict]:
-        """Generate quiz questions from study content using Google Gemini."""
+        """Generate quiz questions from study content using OpenAI."""
         if question_types is None:
             question_types = ['multiple_choice', 'true_false', 'short_answer']
         
@@ -135,14 +135,16 @@ Content:
 {content}"""
         
         try:
-            response = self.client.generate_content(
-                prompt,
-                generation_config=genai.types.GenerationConfig(
-                    temperature=0.7,
-                    max_output_tokens=2000,
-                )
+            response = self.client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are an expert educator creating quiz questions."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                max_tokens=2000,
             )
-            content_text = response.text.strip()
+            content_text = response.choices[0].message.content.strip()
             
             # Try to extract JSON from the response
             start = content_text.find('{')
@@ -164,7 +166,7 @@ Content:
         conversation_history: List[Dict[str, str]] = None,
         subject_context: str = None
     ) -> str:
-        """AI tutor chat for concept clarification and study help using Google Gemini."""
+        """AI tutor chat for concept clarification and study help using OpenAI."""
         system_prompt = f"""You are an intelligent, patient, and encouraging study tutor.
 Your role is to help students understand concepts, answer questions, and provide study guidance.
 
@@ -179,33 +181,30 @@ Guidelines:
 
 Respond in a conversational but educational tone."""
         
-        # Build the conversation context
-        full_prompt = system_prompt + "\n\n"
+        # Build conversation messages
+        messages = [{"role": "system", "content": system_prompt}]
         
         # Add conversation history if provided
         if conversation_history:
             for msg in conversation_history:
-                role = msg.get('role', 'user')
-                content = msg.get('content', '')
-                full_prompt += f"{role.upper()}: {content}\n\n"
+                messages.append(msg)
         
         # Add the current message
-        full_prompt += f"USER: {message}\n\nTUTOR:"
+        messages.append({"role": "user", "content": message})
         
         try:
-            response = self.client.generate_content(
-                full_prompt,
-                generation_config=genai.types.GenerationConfig(
-                    temperature=0.7,
-                    max_output_tokens=1000,
-                )
+            response = self.client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=messages,
+                temperature=0.7,
+                max_tokens=1000,
             )
-            return response.text
+            return response.choices[0].message.content
         except Exception as e:
             raise Exception(f"Tutor chat failed: {str(e)}")
     
     def generate_notes_from_transcription(self, transcription: str) -> str:
-        """Generate organized study notes from lecture transcription using Google Gemini."""
+        """Generate organized study notes from lecture transcription using OpenAI."""
         prompt = """You are an expert note-taker. Transform the following lecture transcription into well-organized study notes.
 
 Format the notes with:
@@ -220,14 +219,16 @@ Transcription:
 """ + transcription
         
         try:
-            response = self.client.generate_content(
-                prompt,
-                generation_config=genai.types.GenerationConfig(
-                    temperature=0.7,
-                    max_output_tokens=2000,
-                )
+            response = self.client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are an expert note-taker and study material creator."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                max_tokens=2000,
             )
-            return response.text
+            return response.choices[0].message.content
         except Exception as e:
             raise Exception(f"Note generation failed: {str(e)}")
 

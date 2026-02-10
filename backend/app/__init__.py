@@ -34,7 +34,7 @@ def create_app(config_name: str = None) -> Flask:
     
     app.config['SQLALCHEMY_DATABASE_URI'] = database_url
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    app.config['GEMINI_API_KEY'] = os.getenv('GEMINI_API_KEY')
+    app.config['OPENAI_API_KEY'] = os.getenv('OPENAI_API_KEY')
     
     # JWT Configuration
     app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'your-secret-key-change-in-production')
