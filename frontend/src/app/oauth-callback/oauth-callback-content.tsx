@@ -30,10 +30,10 @@ export default function OAuthCallbackContent() {
         })
         .catch((error) => {
           console.error('Failed to get user info:', error);
-          router.push('/app/login?error=auth_failed');
+          router.push('/login?error=auth_failed');
         });
     } else {
-      router.push('/app/login?error=oauth_failed');
+      router.push('/login?error=oauth_failed');
     }
   }, [searchParams, router]);
 
