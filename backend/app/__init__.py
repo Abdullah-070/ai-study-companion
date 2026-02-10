@@ -5,6 +5,7 @@ from flask import Flask
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
+from flask_jwt_extended import JWTManager
 import os
 from dotenv import load_dotenv
 
@@ -12,6 +13,7 @@ load_dotenv()
 
 db = SQLAlchemy()
 migrate = Migrate()
+jwt = JWTManager()
 
 
 def create_app(config_name: str = None) -> Flask:
@@ -32,12 +34,16 @@ def create_app(config_name: str = None) -> Flask:
     
     app.config['SQLALCHEMY_DATABASE_URI'] = database_url
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    app.config['OPENAI_API_KEY'] = os.getenv('OPENAI_API_KEY')
-    app.config['OPENAI_BASE_URL'] = os.getenv('OPENAI_BASE_URL', 'https://api.openai.com/v1')
+    app.config['GEMINI_API_KEY'] = os.getenv('GEMINI_API_KEY')
+    
+    # JWT Configuration
+    app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'your-secret-key-change-in-production')
+    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = False  # Token expires based on timedelta
     
     # Initialize extensions
     db.init_app(app)
     migrate.init_app(app, db)
+    jwt.init_app(app)
     
     # Configure CORS - allow frontend and localhost for development
     frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000').rstrip('/')
@@ -48,13 +54,20 @@ def create_app(config_name: str = None) -> Flask:
          methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'])
     
     # Register blueprints
+    from app.routes.auth import auth_bp
     from app.routes.lectures import lectures_bp
     from app.routes.notes import notes_bp
     from app.routes.flashcards import flashcards_bp
     from app.routes.quizzes import quizzes_bp
     from app.routes.tutor import tutor_bp
     from app.routes.subjects import subjects_bp
+    from app.routes.oauth import oauth_bp, init_oauth
     
+    # Initialize OAuth
+    init_oauth(app)
+    
+    app.register_blueprint(auth_bp, url_prefix='/api/auth')
+    app.register_blueprint(oauth_bp, url_prefix='/api/auth/oauth')
     app.register_blueprint(lectures_bp, url_prefix='/api/lectures')
     app.register_blueprint(notes_bp, url_prefix='/api/notes')
     app.register_blueprint(flashcards_bp, url_prefix='/api/flashcards')

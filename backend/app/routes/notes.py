@@ -2,6 +2,7 @@
 Notes API Routes
 """
 from flask import Blueprint, request, jsonify
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from app import db
 from app.models import Note, Subject, Lecture
 from app.services import ai_service
@@ -10,12 +11,14 @@ notes_bp = Blueprint('notes', __name__)
 
 
 @notes_bp.route('', methods=['GET'])
+@jwt_required()
 def get_notes():
-    """Get all notes, optionally filtered by subject or lecture."""
+    """Get all notes for current user, optionally filtered by subject or lecture."""
+    user_id = get_jwt_identity()
     subject_id = request.args.get('subject_id', type=int)
     lecture_id = request.args.get('lecture_id', type=int)
     
-    query = Note.query
+    query = Note.query.filter_by(user_id=user_id)
     if subject_id:
         query = query.filter_by(subject_id=subject_id)
     if lecture_id:
@@ -26,15 +29,19 @@ def get_notes():
 
 
 @notes_bp.route('/<int:note_id>', methods=['GET'])
+@jwt_required()
 def get_note(note_id: int):
     """Get a specific note by ID."""
-    note = Note.query.get_or_404(note_id)
+    user_id = get_jwt_identity()
+    note = Note.query.filter_by(id=note_id, user_id=user_id).first_or_404()
     return jsonify(note.to_dict())
 
 
 @notes_bp.route('', methods=['POST'])
+@jwt_required()
 def create_note():
     """Create a new note."""
+    user_id = get_jwt_identity()
     data = request.get_json()
     
     if not data or not data.get('title'):
@@ -46,12 +53,14 @@ def create_note():
     if not data.get('subject_id'):
         return jsonify({'error': 'Subject ID is required'}), 400
     
-    # Verify subject exists
-    Subject.query.get_or_404(data['subject_id'])
+    # Verify subject exists and belongs to user
+    from app.models import Subject
+    Subject.query.filter_by(id=data['subject_id'], user_id=user_id).first_or_404()
     
-    # Verify lecture exists if provided
+    # Verify lecture exists and belongs to user if provided
     if data.get('lecture_id'):
-        Lecture.query.get_or_404(data['lecture_id'])
+        from app.models import Lecture
+        Lecture.query.filter_by(id=data['lecture_id'], user_id=user_id).first_or_404()
     
     note = Note(
         title=data['title'],
@@ -59,7 +68,8 @@ def create_note():
         summary=data.get('summary'),
         tags=','.join(data['tags']) if isinstance(data.get('tags'), list) else data.get('tags'),
         subject_id=data['subject_id'],
-        lecture_id=data.get('lecture_id')
+        lecture_id=data.get('lecture_id'),
+        user_id=user_id
     )
     
     db.session.add(note)
@@ -69,9 +79,12 @@ def create_note():
 
 
 @notes_bp.route('/from-lecture/<int:lecture_id>', methods=['POST'])
+@jwt_required()
 def create_from_lecture(lecture_id: int):
     """Generate notes from a lecture transcription."""
-    lecture = Lecture.query.get_or_404(lecture_id)
+    user_id = get_jwt_identity()
+    from app.models import Lecture
+    lecture = Lecture.query.filter_by(id=lecture_id, user_id=user_id).first_or_404()
     
     if not lecture.transcription:
         return jsonify({'error': 'No transcription available'}), 400
@@ -87,7 +100,8 @@ def create_from_lecture(lecture_id: int):
             content=generated_content,
             summary=lecture.summary,
             subject_id=lecture.subject_id,
-            lecture_id=lecture.id
+            lecture_id=lecture.id,
+            user_id=user_id
         )
         
         db.session.add(note)
@@ -100,9 +114,11 @@ def create_from_lecture(lecture_id: int):
 
 
 @notes_bp.route('/<int:note_id>/summarize', methods=['POST'])
+@jwt_required()
 def summarize_note(note_id: int):
     """Generate or regenerate summary for a note."""
-    note = Note.query.get_or_404(note_id)
+    user_id = get_jwt_identity()
+    note = Note.query.filter_by(id=note_id, user_id=user_id).first_or_404()
     
     try:
         note.summary = ai_service.summarize_text(note.content, max_length=200)
@@ -113,9 +129,11 @@ def summarize_note(note_id: int):
 
 
 @notes_bp.route('/<int:note_id>', methods=['PUT'])
+@jwt_required()
 def update_note(note_id: int):
     """Update a note."""
-    note = Note.query.get_or_404(note_id)
+    user_id = get_jwt_identity()
+    note = Note.query.filter_by(id=note_id, user_id=user_id).first_or_404()
     data = request.get_json()
     
     if data.get('title'):
@@ -133,9 +151,11 @@ def update_note(note_id: int):
 
 
 @notes_bp.route('/<int:note_id>', methods=['DELETE'])
+@jwt_required()
 def delete_note(note_id: int):
     """Delete a note."""
-    note = Note.query.get_or_404(note_id)
+    user_id = get_jwt_identity()
+    note = Note.query.filter_by(id=note_id, user_id=user_id).first_or_404()
     
     db.session.delete(note)
     db.session.commit()

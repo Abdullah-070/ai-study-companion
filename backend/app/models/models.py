@@ -11,6 +11,7 @@ class Subject(db.Model):
     __tablename__ = 'subjects'
     
     id: int = db.Column(db.Integer, primary_key=True)
+    user_id: int = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
     name: str = db.Column(db.String(200), nullable=False)
     description: Optional[str] = db.Column(db.Text)
     color: str = db.Column(db.String(7), default='#3B82F6')  # Hex color
@@ -18,6 +19,7 @@ class Subject(db.Model):
     updated_at: datetime = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
+    user = db.relationship('User', back_populates='subjects')
     lectures = db.relationship('Lecture', backref='subject', lazy='dynamic', cascade='all, delete-orphan')
     notes = db.relationship('Note', backref='subject', lazy='dynamic', cascade='all, delete-orphan')
     flashcard_sets = db.relationship('FlashcardSet', backref='subject', lazy='dynamic', cascade='all, delete-orphan')
@@ -43,11 +45,15 @@ class Lecture(db.Model):
     __tablename__ = 'lectures'
     
     id: int = db.Column(db.Integer, primary_key=True)
+    user_id: int = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
     title: str = db.Column(db.String(300), nullable=False)
     source_type: str = db.Column(db.String(50), nullable=False)  # 'live', 'youtube', 'upload'
     source_url: Optional[str] = db.Column(db.String(500))
     transcription: Optional[str] = db.Column(db.Text)
     summary: Optional[str] = db.Column(db.Text)
+    
+    # Relationship to user
+    user = db.relationship('User', back_populates='lectures')
     duration_seconds: Optional[int] = db.Column(db.Integer)
     subject_id: int = db.Column(db.Integer, db.ForeignKey('subjects.id'), nullable=False)
     created_at: datetime = db.Column(db.DateTime, default=datetime.utcnow)
@@ -78,6 +84,7 @@ class Note(db.Model):
     __tablename__ = 'notes'
     
     id: int = db.Column(db.Integer, primary_key=True)
+    user_id: int = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
     title: str = db.Column(db.String(300), nullable=False)
     content: str = db.Column(db.Text, nullable=False)
     summary: Optional[str] = db.Column(db.Text)
@@ -86,6 +93,9 @@ class Note(db.Model):
     lecture_id: Optional[int] = db.Column(db.Integer, db.ForeignKey('lectures.id'))
     created_at: datetime = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at: datetime = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationship to user
+    user = db.relationship('User', back_populates='notes')
     
     def to_dict(self) -> dict:
         return {
@@ -108,6 +118,7 @@ class FlashcardSet(db.Model):
     __tablename__ = 'flashcard_sets'
     
     id: int = db.Column(db.Integer, primary_key=True)
+    user_id: int = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
     title: str = db.Column(db.String(300), nullable=False)
     description: Optional[str] = db.Column(db.Text)
     subject_id: int = db.Column(db.Integer, db.ForeignKey('subjects.id'), nullable=False)
@@ -115,6 +126,7 @@ class FlashcardSet(db.Model):
     updated_at: datetime = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
+    user = db.relationship('User', back_populates='flashcard_sets')
     flashcards = db.relationship('Flashcard', backref='flashcard_set', lazy='dynamic', cascade='all, delete-orphan')
     
     def to_dict(self) -> dict:
@@ -166,12 +178,14 @@ class Quiz(db.Model):
     __tablename__ = 'quizzes'
     
     id: int = db.Column(db.Integer, primary_key=True)
+    user_id: int = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
     title: str = db.Column(db.String(300), nullable=False)
     description: Optional[str] = db.Column(db.Text)
     subject_id: int = db.Column(db.Integer, db.ForeignKey('subjects.id'), nullable=False)
     created_at: datetime = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relationships
+    user = db.relationship('User', back_populates='quizzes')
     questions = db.relationship('QuizQuestion', backref='quiz', lazy='dynamic', cascade='all, delete-orphan')
     attempts = db.relationship('QuizAttempt', backref='quiz', lazy='dynamic', cascade='all, delete-orphan')
     

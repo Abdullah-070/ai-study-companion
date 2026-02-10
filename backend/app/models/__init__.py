@@ -12,8 +12,10 @@ from app.models.models import (
     QuizAttempt,
     ChatMessage
 )
+from app.models.user import User
 
 __all__ = [
+    'User',
     'Subject',
     'Lecture',
     'Note',
