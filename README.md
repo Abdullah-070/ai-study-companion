@@ -39,7 +39,7 @@ An intelligent learning assistant that helps students throughout their study jou
 - **Python 3.11+** with Flask
 - **SQLAlchemy** for database ORM
 - **SQLite** (development) / **PostgreSQL** (production)
-- **Gemini API** for AI features
+- **Google Gemini API** for AI features
 
 ### Frontend
 - **Next.js 14** with React
@@ -51,7 +51,7 @@ An intelligent learning assistant that helps students throughout their study jou
 
 - Python 3.11 or higher
 - Node.js 18 or higher
-- Gemini API key
+- Google Gemini API key (get it free from [Google AI Studio](https://makersuite.google.com/app/apikey))
 
 ## 🚀 Getting Started
 
@@ -82,7 +82,7 @@ pip install -r requirements.txt
 
 # Create environment file
 cp .env.example .env
-# Edit .env and add your Gemini API key
+# Edit .env and add your OpenAI API key
 
 # Run the backend server
 python run.py
@@ -110,8 +110,8 @@ The frontend will start at `http://localhost:3000`
 ### Backend (.env)
 
 ```env
-# Gemini API Configuration
-Gemini_API_KEY=your_gemini_api_key_here
+# Google Gemini API Configuration
+GEMINI_API_KEY=your_gemini_api_key_here
 
 # Database Configuration
 DATABASE_URL=sqlite:///study_companion.db
@@ -120,6 +120,9 @@ DATABASE_URL=sqlite:///study_companion.db
 FLASK_ENV=development
 FLASK_DEBUG=1
 SECRET_KEY=your-secret-key-change-in-production
+
+# JWT Configuration
+JWT_SECRET_KEY=your-jwt-secret-key-change-in-production
 
 # CORS Configuration
 FRONTEND_URL=http://localhost:3000
@@ -240,4 +243,3 @@ MIT License
 ## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
-
