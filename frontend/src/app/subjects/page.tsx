@@ -14,9 +14,8 @@ import { LoadingPage, LoadingCard } from '@/components/ui/Loading';
 import Alert from '@/components/ui/Alert';
 import Link from 'next/link';
 import { formatDate, generateSubjectColor } from '@/lib/utils';
-import { ProtectedRoute } from '@/components/ProtectedRoute';
 
-function SubjectsPageContent() {
+export default function SubjectsPage() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -269,13 +268,5 @@ function SubjectsPageContent() {
         </form>
       </Modal>
     </div>
-  );
-}
-
-export default function SubjectsPage() {
-  return (
-    <ProtectedRoute>
-      <SubjectsPageContent />
-    </ProtectedRoute>
   );
 }

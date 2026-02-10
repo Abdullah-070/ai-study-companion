@@ -2,7 +2,7 @@
  * API Client for AI Study Companion Backend
  */
 
-const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || '/api').replace(/\/$/, '');
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
 class ApiError extends Error {
   constructor(
@@ -22,20 +22,8 @@ async function fetchApi<T>(
 ): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
   
-  // Get auth token from localStorage
-  let authHeader = {};
-  if (typeof window !== 'undefined') {
-    const accessToken = localStorage.getItem('access_token');
-    if (accessToken) {
-      authHeader = {
-        'Authorization': `Bearer ${accessToken}`,
-      };
-    }
-  }
-
   const defaultHeaders: HeadersInit = {
     'Content-Type': 'application/json',
-    ...authHeader,
   };
 
   const response = await fetch(url, {
@@ -45,14 +33,6 @@ async function fetchApi<T>(
       ...options.headers,
     },
   });
-
-  // If 401, redirect to login
-  if (response.status === 401 && typeof window !== 'undefined') {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('user');
-    window.location.href = '/login';
-  }
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));

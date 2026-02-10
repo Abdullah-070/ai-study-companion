@@ -89,20 +89,10 @@ export default function FlashcardSetPage() {
   if (error || !set || flashcards.length === 0) {
     return (
       <div className="p-8">
-        {error && <Alert type="error">{error}</Alert>}
-        {!error && (
-          <Alert type="info" className="mb-4">
-            This flashcard set has no cards yet. Click "Add/Edit Cards" to create your first card!
-          </Alert>
-        )}
-        <div className="flex gap-3">
-          <Button onClick={() => router.push(`/flashcards/${set?.id}/edit`)} variant="primary" className="mt-4">
-            Add Cards Now
-          </Button>
-          <Button onClick={() => router.back()} variant="secondary" className="mt-4">
-            Go Back
-          </Button>
-        </div>
+        <Alert type="error">{error || 'Flashcard set not found'}</Alert>
+        <Button onClick={() => router.back()} className="mt-4">
+          Go Back
+        </Button>
       </div>
     );
   }
@@ -196,7 +186,7 @@ export default function FlashcardSetPage() {
           Study Mode
         </Button>
         <Button onClick={() => router.push(`/flashcards/${flashcardSetId}/edit`)} variant="secondary">
-          Add/Edit Cards
+          Edit Cards
         </Button>
         <Button onClick={() => router.back()} variant="secondary">
           Back
