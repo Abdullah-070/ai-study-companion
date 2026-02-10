@@ -2,7 +2,7 @@
  * API Client for AI Study Companion Backend
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || '/api').replace(/\/$/, '');
 
 class ApiError extends Error {
   constructor(
