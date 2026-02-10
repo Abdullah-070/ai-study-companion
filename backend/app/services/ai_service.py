@@ -1,7 +1,7 @@
 """
 AI Service - Google Gemini integration for transcription, summarization, and tutoring
 """
-import google.generativeai as genai
+import google.genai as genai
 from flask import current_app
 from typing import Optional, List, Dict
 import json

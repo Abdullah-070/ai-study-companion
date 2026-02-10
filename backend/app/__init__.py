@@ -47,8 +47,14 @@ def create_app(config_name: str = None) -> Flask:
     
     # Configure CORS - allow frontend and localhost for development
     frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000').rstrip('/')
+    cors_origins = [
+        frontend_url,
+        'http://localhost:3000',
+        'http://localhost:3001',
+        'https://ai-study-companion-zeta.vercel.app'
+    ]
     CORS(app, 
-         origins=[frontend_url, 'http://localhost:3000', 'http://localhost:3001'],
+         origins=cors_origins,
          supports_credentials=True,
          allow_headers=['Content-Type', 'Authorization'],
          methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'])
