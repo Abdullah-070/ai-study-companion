@@ -2,7 +2,6 @@
 Quizzes API Routes
 """
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
 from app import db
 from app.models import Quiz, QuizQuestion, QuizAttempt, Subject, Note, Lecture
 from app.services import ai_service
@@ -12,13 +11,11 @@ quizzes_bp = Blueprint('quizzes', __name__)
 
 
 @quizzes_bp.route('', methods=['GET'])
-@jwt_required()
 def get_quizzes():
     """Get all quizzes, optionally filtered by subject."""
-    user_id = get_jwt_identity()
     subject_id = request.args.get('subject_id', type=int)
     
-    query = Quiz.query.filter_by(user_id=user_id)
+    query = Quiz.query
     if subject_id:
         query = query.filter_by(subject_id=subject_id)
     
@@ -27,11 +24,9 @@ def get_quizzes():
 
 
 @quizzes_bp.route('/<int:quiz_id>', methods=['GET'])
-@jwt_required()
 def get_quiz(quiz_id: int):
     """Get a specific quiz with all questions."""
-    user_id = get_jwt_identity()
-    quiz = Quiz.query.filter_by(id=quiz_id, user_id=user_id).first_or_404()
+    quiz = Quiz.query.get_or_404(quiz_id)
     result = quiz.to_dict()
     
     # Include questions (without correct answers for taking the quiz)
@@ -49,10 +44,8 @@ def get_quiz(quiz_id: int):
 
 
 @quizzes_bp.route('', methods=['POST'])
-@jwt_required()
 def create_quiz():
     """Create a new quiz manually."""
-    user_id = get_jwt_identity()
     data = request.get_json()
     
     if not data or not data.get('title'):
@@ -61,13 +54,12 @@ def create_quiz():
     if not data.get('subject_id'):
         return jsonify({'error': 'Subject ID is required'}), 400
     
-    Subject.query.filter_by(id=data['subject_id'], user_id=user_id).first_or_404()
+    Subject.query.get_or_404(data['subject_id'])
     
     quiz = Quiz(
         title=data['title'],
         description=data.get('description'),
-        subject_id=data['subject_id'],
-        user_id=user_id
+        subject_id=data['subject_id']
     )
     
     db.session.add(quiz)
@@ -77,25 +69,23 @@ def create_quiz():
 
 
 @quizzes_bp.route('/generate', methods=['POST'])
-@jwt_required()
 def generate_quiz():
     """Generate a quiz from content using AI."""
-    user_id = get_jwt_identity()
     data = request.get_json()
     
     if not data or not data.get('subject_id'):
         return jsonify({'error': 'Subject ID is required'}), 400
     
-    Subject.query.filter_by(id=data['subject_id'], user_id=user_id).first_or_404()
+    Subject.query.get_or_404(data['subject_id'])
     
     # Get content from note, lecture, or direct input
     content = None
     if data.get('note_id'):
-        note = Note.query.filter_by(id=data['note_id'], user_id=user_id).first_or_404()
+        note = Note.query.get_or_404(data['note_id'])
         content = note.content
         default_title = f"Quiz: {note.title}"
     elif data.get('lecture_id'):
-        lecture = Lecture.query.filter_by(id=data['lecture_id'], user_id=user_id).first_or_404()
+        lecture = Lecture.query.get_or_404(data['lecture_id'])
         content = lecture.transcription or lecture.summary
         default_title = f"Quiz: {lecture.title}"
     elif data.get('content'):
@@ -122,8 +112,7 @@ def generate_quiz():
         quiz = Quiz(
             title=data.get('title', default_title),
             description=data.get('description'),
-            subject_id=data['subject_id'],
-            user_id=user_id
+            subject_id=data['subject_id']
         )
         db.session.add(quiz)
         db.session.flush()
@@ -152,11 +141,9 @@ def generate_quiz():
 
 
 @quizzes_bp.route('/<int:quiz_id>/questions', methods=['POST'])
-@jwt_required()
 def add_question(quiz_id: int):
     """Add a question to a quiz."""
-    user_id = get_jwt_identity()
-    quiz = Quiz.query.filter_by(id=quiz_id, user_id=user_id).first_or_404()
+    quiz = Quiz.query.get_or_404(quiz_id)
     data = request.get_json()
     
     if not data or not data.get('question'):
@@ -182,11 +169,9 @@ def add_question(quiz_id: int):
 
 
 @quizzes_bp.route('/questions/<int:question_id>', methods=['PUT'])
-@jwt_required()
 def update_question(question_id: int):
     """Update a quiz question."""
-    user_id = get_jwt_identity()
-    question = QuizQuestion.query.join(Quiz).filter(QuizQuestion.id == question_id, Quiz.user_id == user_id).first_or_404()
+    question = QuizQuestion.query.get_or_404(question_id)
     data = request.get_json()
     
     if data.get('question'):
@@ -208,11 +193,9 @@ def update_question(question_id: int):
 
 
 @quizzes_bp.route('/questions/<int:question_id>', methods=['DELETE'])
-@jwt_required()
 def delete_question(question_id: int):
     """Delete a quiz question."""
-    user_id = get_jwt_identity()
-    question = QuizQuestion.query.join(Quiz).filter(QuizQuestion.id == question_id, Quiz.user_id == user_id).first_or_404()
+    question = QuizQuestion.query.get_or_404(question_id)
     
     db.session.delete(question)
     db.session.commit()
@@ -221,11 +204,9 @@ def delete_question(question_id: int):
 
 
 @quizzes_bp.route('/<int:quiz_id>/submit', methods=['POST'])
-@jwt_required()
 def submit_quiz(quiz_id: int):
     """Submit quiz answers and get results."""
-    user_id = get_jwt_identity()
-    quiz = Quiz.query.filter_by(id=quiz_id, user_id=user_id).first_or_404()
+    quiz = Quiz.query.get_or_404(quiz_id)
     data = request.get_json()
     
     if not data or not data.get('answers'):
@@ -279,21 +260,17 @@ def submit_quiz(quiz_id: int):
 
 
 @quizzes_bp.route('/<int:quiz_id>/attempts', methods=['GET'])
-@jwt_required()
 def get_quiz_attempts(quiz_id: int):
     """Get all attempts for a quiz."""
-    user_id = get_jwt_identity()
-    quiz = Quiz.query.filter_by(id=quiz_id, user_id=user_id).first_or_404()
+    quiz = Quiz.query.get_or_404(quiz_id)
     attempts = quiz.attempts.order_by(QuizAttempt.completed_at.desc()).all()
     return jsonify([a.to_dict() for a in attempts])
 
 
 @quizzes_bp.route('/<int:quiz_id>', methods=['PUT'])
-@jwt_required()
 def update_quiz(quiz_id: int):
     """Update a quiz."""
-    user_id = get_jwt_identity()
-    quiz = Quiz.query.filter_by(id=quiz_id, user_id=user_id).first_or_404()
+    quiz = Quiz.query.get_or_404(quiz_id)
     data = request.get_json()
     
     if data.get('title'):
@@ -307,11 +284,9 @@ def update_quiz(quiz_id: int):
 
 
 @quizzes_bp.route('/<int:quiz_id>', methods=['DELETE'])
-@jwt_required()
 def delete_quiz(quiz_id: int):
     """Delete a quiz and all its questions and attempts."""
-    user_id = get_jwt_identity()
-    quiz = Quiz.query.filter_by(id=quiz_id, user_id=user_id).first_or_404()
+    quiz = Quiz.query.get_or_404(quiz_id)
     
     db.session.delete(quiz)
     db.session.commit()

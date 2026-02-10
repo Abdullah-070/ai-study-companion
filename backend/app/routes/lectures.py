@@ -2,7 +2,6 @@
 Lectures API Routes
 """
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
 from app import db
 from app.models import Lecture, Subject
 from app.services import ai_service, youtube_service
@@ -12,13 +11,11 @@ lectures_bp = Blueprint('lectures', __name__)
 
 
 @lectures_bp.route('', methods=['GET'])
-@jwt_required()
 def get_lectures():
-    """Get all lectures for current user, optionally filtered by subject."""
-    user_id = get_jwt_identity()
+    """Get all lectures, optionally filtered by subject."""
     subject_id = request.args.get('subject_id', type=int)
     
-    query = Lecture.query.filter_by(user_id=user_id)
+    query = Lecture.query
     if subject_id:
         query = query.filter_by(subject_id=subject_id)
     
@@ -27,11 +24,9 @@ def get_lectures():
 
 
 @lectures_bp.route('/<int:lecture_id>', methods=['GET'])
-@jwt_required()
 def get_lecture(lecture_id: int):
     """Get a specific lecture by ID."""
-    user_id = get_jwt_identity()
-    lecture = Lecture.query.filter_by(id=lecture_id, user_id=user_id).first_or_404()
+    lecture = Lecture.query.get_or_404(lecture_id)
     return jsonify(lecture.to_dict())
 
 

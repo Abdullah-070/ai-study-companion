@@ -2,7 +2,6 @@
 Flashcards API Routes
 """
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
 from app import db
 from app.models import FlashcardSet, Flashcard, Subject, Note, Lecture
 from app.services import ai_service
@@ -13,13 +12,11 @@ flashcards_bp = Blueprint('flashcards', __name__)
 
 
 @flashcards_bp.route('/sets', methods=['GET'])
-@jwt_required()
 def get_flashcard_sets():
-    """Get all flashcard sets for current user, optionally filtered by subject."""
-    user_id = get_jwt_identity()
+    """Get all flashcard sets, optionally filtered by subject."""
     subject_id = request.args.get('subject_id', type=int)
     
-    query = FlashcardSet.query.filter_by(user_id=user_id)
+    query = FlashcardSet.query
     if subject_id:
         query = query.filter_by(subject_id=subject_id)
     
@@ -28,21 +25,17 @@ def get_flashcard_sets():
 
 
 @flashcards_bp.route('/sets/<int:set_id>', methods=['GET'])
-@jwt_required()
 def get_flashcard_set(set_id: int):
     """Get a specific flashcard set with all cards."""
-    user_id = get_jwt_identity()
-    flashcard_set = FlashcardSet.query.filter_by(id=set_id, user_id=user_id).first_or_404()
+    flashcard_set = FlashcardSet.query.get_or_404(set_id)
     result = flashcard_set.to_dict()
     result['flashcards'] = [f.to_dict() for f in flashcard_set.flashcards.all()]
     return jsonify(result)
 
 
 @flashcards_bp.route('/sets', methods=['POST'])
-@jwt_required()
 def create_flashcard_set():
     """Create a new flashcard set."""
-    user_id = get_jwt_identity()
     data = request.get_json()
     
     if not data or not data.get('title'):
@@ -51,10 +44,9 @@ def create_flashcard_set():
     if not data.get('subject_id'):
         return jsonify({'error': 'Subject ID is required'}), 400
     
-    Subject.query.filter_by(id=data['subject_id'], user_id=user_id).first_or_404()
+    Subject.query.get_or_404(data['subject_id'])
     
     flashcard_set = FlashcardSet(
-        user_id=user_id,
         title=data['title'],
         description=data.get('description'),
         subject_id=data['subject_id']
@@ -67,25 +59,23 @@ def create_flashcard_set():
 
 
 @flashcards_bp.route('/sets/generate', methods=['POST'])
-@jwt_required()
 def generate_flashcards():
     """Generate flashcards from content using AI."""
-    user_id = get_jwt_identity()
     data = request.get_json()
     
     if not data or not data.get('subject_id'):
         return jsonify({'error': 'Subject ID is required'}), 400
     
-    Subject.query.filter_by(id=data['subject_id'], user_id=user_id).first_or_404()
+    Subject.query.get_or_404(data['subject_id'])
     
     # Get content from note, lecture, or direct input
     content = None
     if data.get('note_id'):
-        note = Note.query.filter_by(id=data['note_id'], user_id=user_id).first_or_404()
+        note = Note.query.get_or_404(data['note_id'])
         content = note.content
         default_title = f"Flashcards: {note.title}"
     elif data.get('lecture_id'):
-        lecture = Lecture.query.filter_by(id=data['lecture_id'], user_id=user_id).first_or_404()
+        lecture = Lecture.query.get_or_404(data['lecture_id'])
         content = lecture.transcription or lecture.summary
         default_title = f"Flashcards: {lecture.title}"
     elif data.get('content'):
@@ -113,8 +103,7 @@ def generate_flashcards():
         flashcard_set = FlashcardSet(
             title=data.get('title', default_title),
             description=data.get('description'),
-            subject_id=data['subject_id'],
-            user_id=user_id
+            subject_id=data['subject_id']
         )
         db.session.add(flashcard_set)
         db.session.flush()  # Get the ID
@@ -145,11 +134,9 @@ def generate_flashcards():
 
 
 @flashcards_bp.route('/sets/<int:set_id>', methods=['PUT'])
-@jwt_required()
 def update_flashcard_set(set_id: int):
     """Update a flashcard set."""
-    user_id = get_jwt_identity()
-    flashcard_set = FlashcardSet.query.filter_by(id=set_id, user_id=user_id).first_or_404()
+    flashcard_set = FlashcardSet.query.get_or_404(set_id)
     data = request.get_json()
     
     if data.get('title'):
@@ -163,11 +150,9 @@ def update_flashcard_set(set_id: int):
 
 
 @flashcards_bp.route('/sets/<int:set_id>', methods=['DELETE'])
-@jwt_required()
 def delete_flashcard_set(set_id: int):
     """Delete a flashcard set and all its cards."""
-    user_id = get_jwt_identity()
-    flashcard_set = FlashcardSet.query.filter_by(id=set_id, user_id=user_id).first_or_404()
+    flashcard_set = FlashcardSet.query.get_or_404(set_id)
     
     db.session.delete(flashcard_set)
     db.session.commit()
@@ -178,19 +163,15 @@ def delete_flashcard_set(set_id: int):
 # Individual flashcard routes
 
 @flashcards_bp.route('/<int:card_id>', methods=['GET'])
-@jwt_required()
 def get_flashcard(card_id: int):
     """Get a specific flashcard."""
-    user_id = get_jwt_identity()
-    flashcard = Flashcard.query.join(FlashcardSet).filter(Flashcard.id == card_id, FlashcardSet.user_id == user_id).first_or_404()
+    flashcard = Flashcard.query.get_or_404(card_id)
     return jsonify(flashcard.to_dict())
 
 
 @flashcards_bp.route('', methods=['POST'])
-@jwt_required()
 def create_flashcard():
     """Create a new flashcard."""
-    user_id = get_jwt_identity()
     data = request.get_json()
     
     if not data or not data.get('front'):
@@ -202,7 +183,7 @@ def create_flashcard():
     if not data.get('flashcard_set_id'):
         return jsonify({'error': 'Flashcard set ID is required'}), 400
     
-    FlashcardSet.query.filter_by(id=data['flashcard_set_id'], user_id=user_id).first_or_404()
+    FlashcardSet.query.get_or_404(data['flashcard_set_id'])
     
     flashcard = Flashcard(
         front=data['front'],
@@ -217,11 +198,9 @@ def create_flashcard():
 
 
 @flashcards_bp.route('/<int:card_id>', methods=['PUT'])
-@jwt_required()
 def update_flashcard(card_id: int):
     """Update a flashcard."""
-    user_id = get_jwt_identity()
-    flashcard = Flashcard.query.join(FlashcardSet).filter(Flashcard.id == card_id, FlashcardSet.user_id == user_id).first_or_404()
+    flashcard = Flashcard.query.get_or_404(card_id)
     data = request.get_json()
     
     if data.get('front'):
@@ -235,11 +214,9 @@ def update_flashcard(card_id: int):
 
 
 @flashcards_bp.route('/<int:card_id>/review', methods=['POST'])
-@jwt_required()
 def review_flashcard(card_id: int):
     """Record a flashcard review result for spaced repetition."""
-    user_id = get_jwt_identity()
-    flashcard = Flashcard.query.join(FlashcardSet).filter(Flashcard.id == card_id, FlashcardSet.user_id == user_id).first_or_404()
+    flashcard = Flashcard.query.get_or_404(card_id)
     data = request.get_json()
     
     was_correct = data.get('correct', False)
@@ -264,11 +241,9 @@ def review_flashcard(card_id: int):
 
 
 @flashcards_bp.route('/<int:card_id>', methods=['DELETE'])
-@jwt_required()
 def delete_flashcard(card_id: int):
     """Delete a flashcard."""
-    user_id = get_jwt_identity()
-    flashcard = Flashcard.query.join(FlashcardSet).filter(Flashcard.id == card_id, FlashcardSet.user_id == user_id).first_or_404()
+    flashcard = Flashcard.query.get_or_404(card_id)
     
     db.session.delete(flashcard)
     db.session.commit()
@@ -277,21 +252,18 @@ def delete_flashcard(card_id: int):
 
 
 @flashcards_bp.route('/due', methods=['GET'])
-@jwt_required()
 def get_due_flashcards():
     """Get flashcards due for review."""
-    user_id = get_jwt_identity()
     subject_id = request.args.get('subject_id', type=int)
     limit = request.args.get('limit', 20, type=int)
     
-    query = Flashcard.query.join(FlashcardSet).filter(
-        FlashcardSet.user_id == user_id,
-        ((Flashcard.next_review <= datetime.utcnow()) | 
-        (Flashcard.next_review == None))
+    query = Flashcard.query.filter(
+        (Flashcard.next_review <= datetime.utcnow()) | 
+        (Flashcard.next_review == None)
     )
     
     if subject_id:
-        query = query.filter(FlashcardSet.subject_id == subject_id)
+        query = query.join(FlashcardSet).filter(FlashcardSet.subject_id == subject_id)
     
     flashcards = query.order_by(Flashcard.next_review.asc().nullsfirst()).limit(limit).all()
     

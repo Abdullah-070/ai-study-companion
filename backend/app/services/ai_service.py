@@ -11,31 +11,41 @@ class AIService:
     """Service for AI-powered features using OpenAI API."""
     
     def __init__(self):
-        self._client = None
+        self._client: Optional[OpenAI] = None
     
     @property
-    def client(self):
-        """Initialize OpenAI client."""
+    def client(self) -> OpenAI:
+        """Lazy initialization of OpenAI client."""
         if self._client is None:
             api_key = current_app.config.get('OPENAI_API_KEY')
+            base_url = current_app.config.get('OPENAI_BASE_URL', 'https://api.openai.com/v1')
             if not api_key:
+                print("ERROR: OPENAI_API_KEY not found in config")
+                print(f"Available config keys: {list(current_app.config.keys())}")
                 raise ValueError("OPENAI_API_KEY not configured in Flask app config")
-            self._client = OpenAI(api_key=api_key)
+            try:
+                # Initialize OpenAI client with custom base URL (for OpenRouter or other providers)
+                self._client = OpenAI(api_key=api_key, base_url=base_url, timeout=30.0)
+            except TypeError as e:
+                if 'proxies' in str(e):
+                    # Fallback: use environment variable directly
+                    import os
+                    self._client = OpenAI(api_key=api_key, base_url=base_url, timeout=30.0)
+                else:
+                    raise
         return self._client
     
     def transcribe_audio(self, audio_file_path: str) -> str:
-        """Transcribe audio - Gemini support coming soon.
-        For now, use Speech Recognition library or manual input.
-        """
+        """Transcribe audio using OpenAI Whisper API."""
         try:
-            import speech_recognition as sr
-            recognizer = sr.Recognizer()
-            with sr.AudioFile(audio_file_path) as source:
-                audio = recognizer.record(source)
-                text = recognizer.recognize_google(audio)
-            return text
+            with open(audio_file_path, 'rb') as audio_file:
+                transcript = self.client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=audio_file
+                )
+            return transcript.text
         except Exception as e:
-            raise Exception(f"Audio transcription failed: {str(e)}. Please use manual input or provide audio URL.")
+            raise Exception(f"Audio transcription failed: {str(e)}")
     
     def summarize_text(self, text: str, max_length: int = 500) -> str:
         """Generate a summary of the given text using OpenAI."""
@@ -44,19 +54,13 @@ class AIService:
 Content to summarize:
 {text}"""
         
-        try:
-            response = self.client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": "You are an expert summarizer."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.7,
-                max_tokens=1000,
-            )
-            return response.choices[0].message.content
-        except Exception as e:
-            raise Exception(f"Text summarization failed: {str(e)}")
+        response = self.client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=1000
+        )
+        return response.choices[0].message.content
     
     def generate_flashcards(self, content: str, num_cards: int = 10) -> List[Dict[str, str]]:
         """Generate flashcards from study content using OpenAI."""
@@ -75,12 +79,9 @@ Content:
         try:
             response = self.client.chat.completions.create(
                 model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": "You are an expert educator creating flashcards."},
-                    {"role": "user", "content": prompt}
-                ],
+                messages=[{"role": "user", "content": prompt}],
                 temperature=0.7,
-                max_tokens=2000,
+                max_tokens=2000
             )
             content_text = response.choices[0].message.content.strip()
             
@@ -137,12 +138,9 @@ Content:
         try:
             response = self.client.chat.completions.create(
                 model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": "You are an expert educator creating quiz questions."},
-                    {"role": "user", "content": prompt}
-                ],
+                messages=[{"role": "user", "content": prompt}],
                 temperature=0.7,
-                max_tokens=2000,
+                max_tokens=2000
             )
             content_text = response.choices[0].message.content.strip()
             
@@ -181,13 +179,16 @@ Guidelines:
 
 Respond in a conversational but educational tone."""
         
-        # Build conversation messages
+        # Build messages for the API
         messages = [{"role": "system", "content": system_prompt}]
         
         # Add conversation history if provided
         if conversation_history:
             for msg in conversation_history:
-                messages.append(msg)
+                messages.append({
+                    "role": msg.get('role', 'user'),
+                    "content": msg.get('content', '')
+                })
         
         # Add the current message
         messages.append({"role": "user", "content": message})
@@ -197,7 +198,7 @@ Respond in a conversational but educational tone."""
                 model="gpt-3.5-turbo",
                 messages=messages,
                 temperature=0.7,
-                max_tokens=1000,
+                max_tokens=1000
             )
             return response.choices[0].message.content
         except Exception as e:
@@ -221,12 +222,9 @@ Transcription:
         try:
             response = self.client.chat.completions.create(
                 model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": "You are an expert note-taker and study material creator."},
-                    {"role": "user", "content": prompt}
-                ],
+                messages=[{"role": "user", "content": prompt}],
                 temperature=0.7,
-                max_tokens=2000,
+                max_tokens=2000
             )
             return response.choices[0].message.content
         except Exception as e:
